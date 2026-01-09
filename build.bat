@@ -9,7 +9,7 @@ if not exist "models" (
     echo ⚠️  Models directory not found. Creating it...
     mkdir models
     echo 💡 Please download the DeepSeek-OCR model to models\deepseek-ai\DeepSeek-OCR\
-    echo    Run: huggingface-cli download deepseek-ai/DeepSeek-OCR --local-dir models\deepseek-ai/DeepSeek-OCR
+    echo    Run: hf download deepseek-ai/DeepSeek-OCR --local-dir models\deepseek-ai/DeepSeek-OCR
     echo.
 )
 
@@ -17,7 +17,7 @@ REM Check if model files exist
 if not exist "models\deepseek-ai\DeepSeek-OCR\config.json" (
     echo ❌ Model files not found in models\deepseek-ai\DeepSeek-OCR\
     echo 💡 Please download the model first:
-    echo    huggingface-cli download deepseek-ai/DeepSeek-OCR --local-dir models\deepseek-ai\DeepSeek-OCR
+    echo    hf download deepseek-ai/DeepSeek-OCR --local-dir models\deepseek-ai\DeepSeek-OCR
     echo.
     pause
     exit /b 1

@@ -1,0 +1,4 @@
+requests
+huggingface_hub
+"gradio==3.50.2"
+pyyaml
