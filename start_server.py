@@ -83,27 +83,113 @@ def initialize_model():
         print("Initializing DeepSeek-OCR model...")
         
         # Initialize vLLM engine
+        # Select dtype: allow override via DTYPE env, otherwise auto-detect by CUDA compute capability
+        env_dtype = os.environ.get('DTYPE', '').strip().lower()
+
+        # Read compute capability (cc = major.minor)
+        cc = None
+        try:
+            if torch.cuda.is_available():
+                props = torch.cuda.get_device_properties(0)
+                cc = props.major + props.minor / 10.0
+        except Exception:
+            cc = None
+
+        # Map env override first
+        if env_dtype in ('bf16', 'bfloat16'):
+            selected_dtype = 'bfloat16'
+        elif env_dtype in ('fp16', 'half', 'float16'):
+            selected_dtype = 'half'
+        elif env_dtype in ('fp32', 'float32'):
+            selected_dtype = 'float32'
+        else:
+            # Auto-detect: use bfloat16 for compute capability >= 8.0, else half; CPU falls back to float32
+            if cc is None:
+                selected_dtype = 'float32' if not torch.cuda.is_available() else 'half'
+            else:
+                selected_dtype = 'bfloat16' if cc >= 8.0 else 'half'
+
+        # Clamp: prevent bfloat16 on GPUs with compute capability < 8.0
+        if selected_dtype == 'bfloat16' and (cc is None or cc < 8.0):
+            print(f"[WARN] Requested bfloat16 but GPU compute capability {cc or 'unknown'} < 8.0; falling back to half.")
+            selected_dtype = 'half'
+
+        print(f"[DEBUG] Selected dtype for vLLM: {selected_dtype} (env DTYPE={env_dtype or 'unset'}, cc={cc})")
+
+        # Read env overrides to fit 8GB GPUs: lower max seq length & concurrency, raise GPU memory utilization
+        def _to_int(val, default):
+            try:
+                v = int(val)
+                return v if v > 0 else default
+            except Exception:
+                return default
+
+        def _to_float(val, default, lo=0.5, hi=0.98):
+            try:
+                v = float(val)
+                if v < lo:
+                    v = lo
+                if v > hi:
+                    v = hi
+                return v
+            except Exception:
+                return default
+
+        max_model_len = _to_int(os.environ.get('MAX_MODEL_LEN', ''), 2048)
+        max_concurrency = _to_int(os.environ.get('MAX_CONCURRENCY', ''), 1)
+        gpu_mem_util = _to_float(os.environ.get('GPU_MEMORY_UTILIZATION', ''), 0.95)
+
+        print(f"[DEBUG] vLLM memory knobs: max_model_len={max_model_len}, max_num_seqs={max_concurrency}, gpu_memory_utilization={gpu_mem_util}")
+
+        # Optional: switch between CUDA graph capture and eager mode via env
+        enforce_eager_env = os.environ.get('ENFORCE_EAGER', '').strip().lower()
+        enforce_eager_param = enforce_eager_env in ('1', 'true', 'yes', 'on')
+        print(f"[DEBUG] vLLM enforce_eager={enforce_eager_param} (env ENFORCE_EAGER={enforce_eager_env or 'unset'})")
+
+        # Select block size (KV cache page size). On pre-Ampere GPUs/backends, smaller sizes are required.
+        env_block_size = os.environ.get('BLOCK_SIZE', '').strip()
+        # Allow larger pages on GPUs with compute capability >= 8.0 (Ampere+)
+        allowed_blocks = (16, 32, 64) if (cc is None or cc < 8.0) else (16, 32, 64, 128, 256)
+        default_bs = 16
+        try:
+            bs_val = int(env_block_size) if env_block_size else default_bs
+        except Exception:
+            bs_val = default_bs
+        if bs_val not in allowed_blocks:
+            print(f"[WARN] Unsupported BLOCK_SIZE={env_block_size or bs_val} for cc={cc or 'unknown'}; allowed={allowed_blocks}. Falling back to {default_bs}")
+            bs_val = default_bs
+        selected_block_size = bs_val
+        print(f"[DEBUG] vLLM block_size={selected_block_size}")
+
         llm = LLM(
             model=MODEL_PATH,
             hf_overrides={"architectures": ["DeepseekOCRForCausalLM"]},
-            block_size=256,
-            enforce_eager=False,
+            block_size=selected_block_size,
+            enforce_eager=enforce_eager_param,
             trust_remote_code=True,
-            max_model_len=8192,
+            max_model_len=max_model_len,
             swap_space=0,
-            max_num_seqs=MAX_CONCURRENCY,
+            max_num_seqs=max_concurrency,
             tensor_parallel_size=1,
-            gpu_memory_utilization=0.9,
-            disable_mm_preprocessor_cache=True
+            gpu_memory_utilization=gpu_mem_util,
+            disable_mm_preprocessor_cache=True,
+            dtype=selected_dtype
         )
         
         # Set up sampling parameters
         from process.ngram_norepeat import NoRepeatNGramLogitsProcessor
         logits_processors = [NoRepeatNGramLogitsProcessor(ngram_size=20, window_size=50, whitelist_token_ids={128821, 128822})]
         
+        # Read MAX_TOKENS from env to bound generation length for quicker responses
+        max_tokens_env = os.environ.get('MAX_TOKENS', '').strip()
+        try:
+            max_tokens = int(max_tokens_env) if max_tokens_env else 2048
+        except Exception:
+            max_tokens = 2048
+
         sampling_params = SamplingParams(
             temperature=0.0,
-            max_tokens=8192,
+            max_tokens=max_tokens,
             logits_processors=logits_processors,
             skip_special_tokens=False,
             include_stop_str_in_output=True,
@@ -114,6 +200,18 @@ def initialize_model():
 def pdf_to_images_high_quality(pdf_data: bytes, dpi: int = 144) -> List[Image.Image]:
     """Convert PDF bytes to high-quality PIL Images"""
     images = []
+
+    # Allow runtime DPI override via env PDF_DPI
+    dpi_env = os.environ.get('PDF_DPI', '').strip()
+    effective_dpi = dpi
+    try:
+        if dpi_env:
+            dpi_val = int(dpi_env)
+            if dpi_val > 0 and dpi_val <= 300:
+                effective_dpi = dpi_val
+    except Exception:
+        pass
+    print(f"[DEBUG] PDF image conversion DPI={effective_dpi} (env PDF_DPI={dpi_env or 'unset'})")
     
     # Save PDF data to temporary file
     with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_pdf:
@@ -122,7 +220,7 @@ def pdf_to_images_high_quality(pdf_data: bytes, dpi: int = 144) -> List[Image.Im
     
     try:
         pdf_document = fitz.open(temp_pdf_path)
-        zoom = dpi / 72.0
+        zoom = effective_dpi / 72.0
         matrix = fitz.Matrix(zoom, zoom)
         
         for page_num in range(pdf_document.page_count):
@@ -257,7 +355,18 @@ async def process_pdf_endpoint(file: UploadFile = File(...), prompt: Optional[st
         # Convert PDF to images
         images = pdf_to_images_high_quality(pdf_data, dpi=144)
         print(f"[DEBUG] Converted PDF to {len(images)} images")
-        
+
+        # Optional: limit pages via env MAX_PAGES for faster responses on large PDFs
+        max_pages_env = os.environ.get('MAX_PAGES', '').strip()
+        try:
+            max_pages = int(max_pages_env) if max_pages_env else 0
+        except Exception:
+            max_pages = 0
+        if max_pages > 0 and len(images) > max_pages:
+            print(f"[DEBUG] MAX_PAGES={max_pages} limiting images from {len(images)} to {max_pages}")
+            images = images[:max_pages]
+            print(f"[DEBUG] After limiting, {len(images)} images will be processed")
+
         if not images:
             print(f"[DEBUG] No images extracted from PDF")
             return BatchOCRResponse(

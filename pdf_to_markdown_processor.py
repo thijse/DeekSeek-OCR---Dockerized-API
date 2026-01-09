@@ -130,7 +130,8 @@ class PDFToMarkdownProcessor:
                 markdown_prompt = '<image>\n<|grounding|>Convert the document to markdown.'
                 data = {'prompt': markdown_prompt}
                 
-                response = requests.post(url, files=files, data=data, timeout=300)
+                timeout_val = int(os.environ.get("REQUEST_TIMEOUT", "900"))
+                response = requests.post(url, files=files, data=data, timeout=timeout_val)
                 
                 if response.status_code == 200:
                     result = response.json()
