@@ -46,6 +46,26 @@ from config import IMAGE_SIZE, BASE_SIZE, CROP_MODE, PRINT_NUM_VIS_TOKENS, PROMP
 # The image token id may be various
 _IMAGE_TOKEN = "<image>"
 
+# Select tensor dtype for vision pipeline based on env DTYPE or CUDA capability
+import os
+_env_dtype = os.environ.get('DTYPE', '').strip().lower()
+if _env_dtype in ('bf16', 'bfloat16'):
+    TENSOR_DTYPE = torch.bfloat16
+elif _env_dtype in ('fp16', 'half', 'float16'):
+    TENSOR_DTYPE = torch.float16
+elif _env_dtype in ('fp32', 'float32'):
+    TENSOR_DTYPE = torch.float32
+else:
+    try:
+        if torch.cuda.is_available():
+            _props = torch.cuda.get_device_properties(0)
+            _cc = _props.major + _props.minor / 10.0
+            TENSOR_DTYPE = torch.bfloat16 if _cc >= 8.0 else torch.float16
+        else:
+            TENSOR_DTYPE = torch.float32
+    except Exception:
+        TENSOR_DTYPE = torch.float16
+
 
 class DeepseekOCRProcessingInfo(BaseProcessingInfo):
 
@@ -288,11 +308,17 @@ class DeepseekOCRForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
 
         self.sam_model = build_sam_vit_b()
         self.vision_model = build_clip_l()
-
+        
         n_embed = 1280
         self.projector =  MlpProjector(Dict(projector_type="linear", input_dim=2048, n_embed=n_embed))
         self.tile_tag = config.tile_tag
         self.global_view_pos = config.global_view_pos
+
+        # Ensure all vision path modules and special tokens use consistent dtype/device
+        _device = torch.device(f"cuda:{torch.cuda.current_device()}" if torch.cuda.is_available() else "cpu")
+        self.sam_model = self.sam_model.to(device=_device, dtype=TENSOR_DTYPE)
+        self.vision_model = self.vision_model.to(device=_device, dtype=TENSOR_DTYPE)
+        self.projector = self.projector.to(device=_device, dtype=TENSOR_DTYPE)
     
         # self.sam_model = torch.compile(self.sam_model, mode="reduce-overhead")
         # self.vision_model = torch.compile(self.vision_model, mode="reduce-overhead")
@@ -305,8 +331,8 @@ class DeepseekOCRForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
         embed_std = 1 / torch.sqrt(torch.tensor(n_embed, dtype=torch.float32))
         if self.tile_tag == "2D":
             # <|view_separator|>, <|\n|>
-            self.image_newline = nn.Parameter(torch.randn(n_embed) * embed_std)
-            self.view_seperator = nn.Parameter(torch.randn(n_embed) * embed_std)
+            self.image_newline = nn.Parameter((torch.randn(n_embed) * embed_std).to(dtype=TENSOR_DTYPE))
+            self.view_seperator = nn.Parameter((torch.randn(n_embed) * embed_std).to(dtype=TENSOR_DTYPE))
         else:
             raise ValueError(
                 f"Only 2D tile_tag is supported currently, got: {self.tile_tag}"
@@ -385,7 +411,7 @@ class DeepseekOCRForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
         with torch.no_grad():
             for jdx in range(images_spatial_crop.size(0)):
                 # with torch.set_grad_enabled(False):
-                patches = images_crop[jdx][0].to(torch.bfloat16) # batch_size = 1
+                patches = images_crop[jdx][0].to(TENSOR_DTYPE) # batch_size = 1
                 image_ori = pixel_values[jdx]
                 crop_shape = images_spatial_crop[jdx][0]
 
@@ -473,7 +499,7 @@ class DeepseekOCRForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
 
         # image_input: [pixel_values, images_crop, images_spatial_crop]
     
-        pixel_values = image_input[0].to(torch.bfloat16)
+        pixel_values = image_input[0].to(TENSOR_DTYPE)
         # print(image_input[1][0].shape)
         # print(type(image_input[1]))
         # exit()
