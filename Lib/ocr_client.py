@@ -11,7 +11,7 @@ from typing import Optional, Tuple, Dict, Any
 import requests
 import fitz  # PyMuPDF
 
-from .config import Config, get_config
+from .config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -24,14 +24,14 @@ class OCRClient:
     The client is responsible for queuing and sequential processing.
     """
     
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(self, config: Config):
         """
         Initialize the OCR client.
         
         Args:
-            config: Configuration instance. If None, uses global config.
+            config: Configuration instance.
         """
-        self.config = config or get_config()
+        self.config = config
         self._setup_endpoints()
     
     def _setup_endpoints(self):

@@ -5,16 +5,22 @@ Sample: PDF to OCR (plain text extraction)
 Minimal example showing how to extract plain text from PDFs using the DeepSeek-OCR library.
 """
 
+import sys
 from pathlib import Path
-from Lib import get_config, OCRClient, PostProcessor
 import time
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def extract_text(pdf_path: str, output_dir: str = "data/results"):
+from Lib import config, OCRClient, PostProcessor
+
+
+def extract_text(pdf_path: str, output_dir: str = None):
     """Extract plain text from a PDF."""
     
+    output_dir = output_dir or str(config.results_dir)
+    
     # Initialize components
-    config = get_config()
     client = OCRClient(config)
     postprocessor = PostProcessor(config)
     
@@ -56,8 +62,6 @@ def extract_text(pdf_path: str, output_dir: str = "data/results"):
 
 
 if __name__ == "__main__":
-    import sys
-    
     if len(sys.argv) < 2:
         print("Usage: python sample_pdf_to_ocr.py <pdf_path>")
         sys.exit(1)

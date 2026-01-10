@@ -5,16 +5,22 @@ Sample: PDF conversion with image extraction
 Minimal example showing how to extract images from PDFs during conversion.
 """
 
+import sys
 from pathlib import Path
-from Lib import get_config, OCRClient, PostProcessor
 import time
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def convert_with_images(pdf_path: str, output_dir: str = "data/results"):
+from Lib import config, OCRClient, PostProcessor
+
+
+def convert_with_images(pdf_path: str, output_dir: str = None):
     """Convert PDF to Markdown and extract images."""
     
+    output_dir = output_dir or str(config.results_dir)
+    
     # Initialize components
-    config = get_config()
     client = OCRClient(config)
     postprocessor = PostProcessor(config)
     
@@ -63,8 +69,6 @@ def convert_with_images(pdf_path: str, output_dir: str = "data/results"):
 
 
 if __name__ == "__main__":
-    import sys
-    
     if len(sys.argv) < 2:
         print("Usage: python sample_with_images.py <pdf_path>")
         sys.exit(1)

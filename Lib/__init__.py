@@ -5,15 +5,15 @@ Provides API client, post-processing, and file management utilities for DeepSeek
 Can be used by GUI, CLI scripts, or Docker-internal applications.
 """
 
-from .config import Config, get_config, set_config
+from .config import Config
+from .config_location import config
 from .ocr_client import OCRClient
 from .postprocessor import PostProcessor
 from .file_utils import FileManager
 
 __all__ = [
-    'Config', 
-    'get_config', 
-    'set_config',
+    'Config',
+    'config',
     'OCRClient', 
     'PostProcessor',
     'FileManager'

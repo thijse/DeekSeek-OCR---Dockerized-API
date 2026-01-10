@@ -32,7 +32,7 @@ import logging
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from Lib import Config, get_config, OCRClient, PostProcessor, FileManager
+from Lib import Config, config, OCRClient, PostProcessor, FileManager
 
 
 class Colors:

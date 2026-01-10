@@ -5,16 +5,22 @@ Sample: Batch PDF processing
 Minimal example showing how to process multiple PDFs from a folder.
 """
 
+import sys
 from pathlib import Path
-from Lib import get_config, OCRClient, PostProcessor
 import time
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def process_folder(folder_path: str, output_dir: str = "data/results"):
+from Lib import config, OCRClient, PostProcessor
+
+
+def process_folder(folder_path: str, output_dir: str = None):
     """Process all PDFs in a folder."""
     
+    output_dir = output_dir or str(config.results_dir)
+    
     # Initialize components
-    config = get_config()
     client = OCRClient(config)
     postprocessor = PostProcessor(config)
     
@@ -71,7 +77,5 @@ def process_folder(folder_path: str, output_dir: str = "data/results"):
 
 
 if __name__ == "__main__":
-    import sys
-    
     folder = sys.argv[1] if len(sys.argv) > 1 else "data"
     process_folder(folder)

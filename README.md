@@ -1,49 +1,20 @@
 # DeepSeek-OCR: PDF to Markdown Converter
 
-A powerful OCR solution that converts PDF documents to Markdown format using DeepSeek-OCR with FastAPI backend. This project provides both a batch processing script and a REST API for flexible document conversion.
+A powerful OCR solution that converts PDF documents to Markdown format using DeepSeek-OCR with a FastAPI backend. This project provides a REST API, Web GUI, and CLI tool for flexible document conversion.
+
+## 🌟 Features
+
+- **REST API** - Async job-based processing with progress tracking
+- **Web GUI** - Gradio interface for easy file uploads and queue management
+- **CLI Tool** - Command-line interface for batch processing
+- **Docker** - Fully containerized with optional GUI
+- **8GB GPU Support** - Optimized for consumer GPUs (RTX 2070/3060/4060)
+
+---
 
 ## 🚀 Quick Start
 
-### Option 1: Batch Processing with pdf_to_markdown_processor.py
-
-1. Place your PDF files in the `data/` directory
-2. Ensure the DeepSeek-OCR API is running (see Docker setup below)
-3. Run the processor:
-
-```bash
-python pdf_to_markdown_processor.py
-```
-
-### Option 2: REST API with Docker Backend
-
-1. Build and start the Docker container
-2. Use the API endpoints to process documents
-3. Integrate with your applications
-
----
-
-## 📋 Prerequisites
-
-### Hardware Requirements
-- **NVIDIA GPU** with CUDA 11.8+ support
-- **GPU Memory**: Minimum 12GB VRAM (Model takes ~9GB)
-- **System RAM**: Minimum 32GB (recommended: 64GB+)
-- **Storage**: 50GB+ free space for model and containers
-
-### Software Requirements
-- **Python 3.8+** (for local processing)
-- **Docker** 20.10+ with GPU support
-- **Docker Compose** 2.0+
-- **NVIDIA Container Toolkit** installed
-- **CUDA 11.8** compatible drivers
-
----
-
-## 🐳 Docker Backend Setup
-
 ### 1. Download Model Weights
-
-Create a directory for model weights and download the DeepSeek-OCR model:
 
 ```bash
 # Create models directory
@@ -52,562 +23,354 @@ mkdir -p models
 # Download using Hugging Face CLI
 pip install huggingface_hub
 huggingface-cli download deepseek-ai/DeepSeek-OCR --local-dir models/deepseek-ai/DeepSeek-OCR
-
-# Or using git
-git clone https://huggingface.co/deepseek-ai/DeepSeek-OCR models/deepseek-ai/DeepSeek-OCR
 ```
 
-### 2. Build and Run the Docker Container
-
-#### Windows Users
-
-```cmd
-REM Build the Docker image
-build.bat
-
-REM Start the service
-docker-compose up -d
-
-REM Check logs
-docker-compose logs -f deepseek-ocr
-```
-
-#### Linux/macOS Users
+### 2. Build and Start Docker
 
 ```bash
 # Build the Docker image
 docker-compose build
 
-# Start the service
+# Start the API server
 docker-compose up -d
 
-# Check logs
-docker-compose logs -f deepseek-ocr
-```
-
-### 3. Verify Installation
-
-```bash
-# Health check
+# Wait for model to load (~60 seconds), then verify
 curl http://localhost:8000/health
-
-# Expected response:
-{
-  "status": "healthy",
-  "model_loaded": true,
-  "model_path": "/app/models/deepseek-ai/DeepSeek-OCR",
-  "cuda_available": true,
-  "cuda_device_count": 1
-}
 ```
 
----
+### 3. Use the Service
 
-## 📄 PDF Processing Scripts
-
-This project provides several PDF processing scripts, each designed for different use cases. All scripts scan the `data/` directory for PDF files and convert them to Markdown format with different prompts and post-processing options.
-
-### Output Naming Convention
-
-All processors append a suffix to the output filename to indicate the processing method used:
-- **-MD.md**: Markdown conversion (preserves document structure)
-- **-OCR.md**: Plain OCR extraction (raw text without formatting)
-- **-CUSTOM.md**: Custom prompt processing (uses prompt from YAML file)
-
-For example, processing `document.pdf` will create:
-- `document-MD.md` (markdown processors)
-- `document-OCR.md` (OCR processor)
-- `document-CUSTOM.md` (custom prompt processors)
-
----
-
-### 1. pdf_to_markdown_processor.py
-
-**Purpose**: Basic PDF to Markdown conversion using the standard markdown prompt
-
-**Features**:
-- Uses prompt: `'<image>\n<|grounding|>Convert the document to markdown.'`
-- Converts PDFs to structured Markdown format
-- Simple processing without image extraction
-- Outputs files with `-MD.md` suffix
-
-**Usage**:
+**Option A: Web GUI (Local)**
 ```bash
-# Place PDF files in the data directory
-cp your_document.pdf data/
+# Install dependencies
+pip install -r requirements.txt
 
-# Run the processor
-python pdf_to_markdown_processor.py
-
-# Check results
-ls data/*-MD.md
+# Start local GUI (connects to Docker API)
+python GUI.py
+# Open http://localhost:7862
 ```
 
----
-
-### 2. pdf_to_markdown_processor_enhanced.py
-
-**Purpose**: Enhanced PDF to Markdown conversion with post-processing
-
-**Features**:
-- Uses the same markdown prompt as the basic version
-- **Post-processing features**:
-  - Image extraction and saving to `data/images/` folder
-  - Special token cleanup
-  - Reference processing for layout information
-  - Content cleaning and formatting
-- Outputs files with `-MD.md` suffix
-
-**Usage**:
+**Option B: Web GUI (Docker)**
 ```bash
-# Place PDF files in the data directory
-cp your_document.pdf data/
-
-# Run the enhanced processor
-python pdf_to_markdown_processor_enhanced.py
-
-# Check results (including extracted images)
-ls data/*-MD.md
-ls data/images/
+# Start with GUI enabled inside Docker
+ENABLE_GUI=true docker-compose up -d
+# Open http://localhost:7863
 ```
 
----
-
-### 3. pdf_to_ocr_enhanced.py
-
-**Purpose**: Plain OCR text extraction without markdown formatting
-
-**Features**:
-- Uses OCR prompt: `'<image>\nFree OCR.'`
-- Extracts raw text without markdown structure
-- Includes the same post-processing features as the enhanced markdown processor
-- Outputs files with `-OCR.md` suffix
-
-**Usage**:
+**Option C: CLI Tool**
 ```bash
-# Place PDF files in the data directory
-cp your_document.pdf data/
-
-# Run the OCR processor
-python pdf_to_ocr_enhanced.py
-
-# Check results
-ls data/*-OCR.md
+python pdf_to_markdown_cli.py document.pdf -o output/
 ```
 
 ---
 
-### 4. pdf_to_custom_prompt.py
+## 📋 Prerequisites
 
-**Purpose**: PDF processing with custom prompts (raw output)
+### Hardware Requirements
+- **NVIDIA GPU** with CUDA support
+- **GPU Memory**: Minimum 8GB VRAM (tested on RTX 2070)
+- **System RAM**: Minimum 16GB
+- **Storage**: 20GB+ for model weights
 
-**Features**:
-- Uses custom prompt loaded from `custom_prompt.yaml`
-- Returns raw model response without post-processing
-- Ideal for testing and debugging different prompts
-- Outputs files with `-CUSTOM.md` suffix
+### Software Requirements
+- **Python 3.8+**
+- **Docker** 20.10+ with GPU support
+- **Docker Compose** 2.0+
+- **NVIDIA Container Toolkit**
 
-**Configuration**:
-Edit `custom_prompt.yaml` to customize the prompt:
-```yaml
-# Custom prompt for PDF processing
-prompt: '<image>\n<|grounding|>Convert the document to markdown.'
-```
+---
 
-**Usage**:
+## 🔗 URLs & Endpoints
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **API Health** | http://localhost:8000/health | Server status and availability |
+| **API Docs (Swagger)** | http://localhost:8000/docs | Interactive API documentation |
+| **API Docs (ReDoc)** | http://localhost:8000/redoc | Alternative API documentation |
+| **Local GUI** | http://localhost:7862 | Gradio interface (local Python) |
+| **Docker GUI** | http://localhost:7863 | Gradio interface (inside Docker) |
+
+---
+
+## 🌐 Web GUI
+
+The Gradio web interface provides:
+- Drag & drop PDF upload
+- File queue management
+- Multiple processing modes (Markdown, OCR, Custom Prompt)
+- Real-time progress tracking
+- Image extraction options
+- Result preview and download
+
+### Local GUI (Recommended for Development)
 ```bash
-# Edit the prompt in custom_prompt.yaml
-nano custom_prompt.yaml
-
-# Place PDF files in the data directory
-cp your_document.pdf data/
-
-# Run the custom prompt processor
-python pdf_to_custom_prompt.py
-
-# Check results
-ls data/*-CUSTOM.md
+# Requires Docker API running on localhost:8000
+python GUI.py
 ```
 
----
-
-### 5. pdf_to_custom_prompt_enhanced.py
-
-**Purpose**: PDF processing with custom prompts and full post-processing
-
-**Features**:
-- Uses custom prompt loaded from `custom_prompt.yaml`
-- Includes all post-processing features (image extraction, content cleaning, etc.)
-- Combines custom prompts with enhanced output processing
-- Outputs files with `-CUSTOM.md` suffix
-
-**Configuration**:
-Same as `pdf_to_custom_prompt.py` - edit `custom_prompt.yaml` to customize the prompt.
-
-**Usage**:
+### Docker GUI
 ```bash
-# Edit the prompt in custom_prompt.yaml
-nano custom_prompt.yaml
+# Enable GUI in docker-compose
+ENABLE_GUI=true docker-compose up -d
 
-# Place PDF files in the data directory
-cp your_document.pdf data/
-
-# Run the enhanced custom prompt processor
-python pdf_to_custom_prompt_enhanced.py
-
-# Check results (including extracted images)
-ls data/*-CUSTOM.md
-ls data/images/
+# Or set in docker-compose.yml:
+# environment:
+#   - ENABLE_GUI=true
 ```
 
 ---
 
-## 📊 Comparison of Processors
+## 💻 CLI Tool
 
-| Processor | Prompt | Post-Processing | Image Extraction | Output Suffix | Use Case |
-|-----------|--------|-----------------|------------------|---------------|----------|
-| `pdf_to_markdown_processor.py` | Markdown | ❌ | ❌ | `-MD.md` | Quick markdown conversion |
-| `pdf_to_markdown_processor_enhanced.py` | Markdown | ✅ | ✅ | `-MD.md` | Full-featured markdown with images |
-| `pdf_to_ocr_enhanced.py` | Free OCR | ✅ | ✅ | `-OCR.md` | Raw text extraction |
-| `pdf_to_custom_prompt.py` | Custom (YAML) | ❌ | ❌ | `-CUSTOM.md` | Testing custom prompts |
-| `pdf_to_custom_prompt_enhanced.py` | Custom (YAML) | ✅ | ✅ | `-CUSTOM.md` | Custom prompts with full features |
-
----
-
-## 📋 Common Usage Patterns
-
-### Comparing Different Processing Methods
-
-To compare how different processors handle the same document:
+The CLI tool (`pdf_to_markdown_cli.py`) supports all processing options:
 
 ```bash
-# Place a PDF in the data directory
-cp test_document.pdf data/
+# Basic usage
+python pdf_to_markdown_cli.py input.pdf
 
-# Run all processors
-python pdf_to_markdown_processor.py
-python pdf_to_markdown_processor_enhanced.py
-python pdf_to_ocr_enhanced.py
-python pdf_to_custom_prompt.py
+# Specify output directory
+python pdf_to_markdown_cli.py input.pdf -o output/
 
-# Compare outputs
-ls data/test_document-*.md
+# Process all PDFs in a folder
+python pdf_to_markdown_cli.py folder/ --batch
+
+# Process files from a list
+python pdf_to_markdown_cli.py --list files.txt
+
+# OCR mode (plain text extraction)
+python pdf_to_markdown_cli.py input.pdf --mode ocr
+
+# Custom prompt from YAML file
+python pdf_to_markdown_cli.py input.pdf --prompt custom_prompt.yaml
+
+# Extract images to ZIP
+python pdf_to_markdown_cli.py input.pdf --extract-images
+
+# Keep page split markers
+python pdf_to_markdown_cli.py input.pdf --keep-page-splits
+
+# Raw output (no post-processing)
+python pdf_to_markdown_cli.py input.pdf --no-clean
+
+# Verbose output
+python pdf_to_markdown_cli.py input.pdf -v
 ```
 
-### Processing with Custom Prompts
+### CLI Options
 
-1. Edit `custom_prompt.yaml` with your desired prompt:
-```yaml
-prompt: '<image>\nExtract all tables and format as CSV.'
-```
-
-2. Run the custom processor:
-```bash
-python pdf_to_custom_prompt_enhanced.py
-```
-
-3. Check the specialized output:
-```bash
-cat data/your_document-CUSTOM.md
-```
+| Option | Description |
+|--------|-------------|
+| `--output, -o` | Output directory |
+| `--batch, -b` | Process all PDFs in folder |
+| `--list, -l` | File containing list of PDFs |
+| `--mode, -m` | Processing mode: `markdown` or `ocr` |
+| `--prompt, -p` | Custom prompt YAML file |
+| `--extract-images, -i` | Extract images to ZIP |
+| `--keep-page-splits` | Keep page split markers |
+| `--no-clean` | Skip post-processing |
+| `--suffix, -s` | Output filename suffix |
+| `--host` | API host (default: localhost) |
+| `--port` | API port (default: 8000) |
+| `--verbose, -v` | Verbose output |
 
 ---
 
----
+## 🔌 REST API
 
-## 🔌 REST API Usage
+The API uses an async job-based workflow:
 
-The FastAPI backend provides several endpoints for document processing.
+### Workflow
+1. **Check availability**: `GET /health`
+2. **Submit job**: `POST /jobs/create`
+3. **Poll status**: `GET /jobs/{job_id}`
+4. **Download result**: `GET /jobs/{job_id}/download`
 
 ### API Endpoints
 
 #### Health Check
 ```bash
-GET http://localhost:8000/health
+curl http://localhost:8000/health
 ```
 
-#### Process Single Image
-```bash
-curl -X POST "http://localhost:8000/ocr/image" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@your_image.jpg"
-```
-
-#### Process PDF
-```bash
-curl -X POST "http://localhost:8000/ocr/pdf" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@your_document.pdf"
-```
-
-#### Batch Processing
-```bash
-curl -X POST "http://localhost:8000/ocr/batch" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "files=@image1.jpg" \
-  -F "files=@document.pdf" \
-  -F "files=@image2.png"
-```
-
-### Response Formats
-
-#### Single Image Response
+Response:
 ```json
 {
-  "success": true,
-  "result": "# Document Title\n\nThis is the OCR result in markdown format...",
-  "page_count": 1
+  "status": "healthy",
+  "available": true,
+  "model_loaded": true,
+  "current_job": null
 }
 ```
 
-#### PDF Response
+#### Create Job
+```bash
+curl -X POST http://localhost:8000/jobs/create \
+  -F "file=@document.pdf" \
+  -F "prompt=<image>Convert the content to markdown."
+```
+
+Response:
 ```json
 {
   "success": true,
-  "results": [
-    {
-      "success": true,
-      "result": "# Page 1 Content\n...",
-      "page_count": 1
-    },
-    {
-      "success": true,
-      "result": "# Page 2 Content\n...",
-      "page_count": 2
-    }
-  ],
-  "total_pages": 2,
-  "filename": "document.pdf"
+  "job_id": "20260110_123456_abc12345",
+  "message": "Job started. Total pages: 10"
 }
 ```
+
+#### Get Job Status
+```bash
+curl http://localhost:8000/jobs/{job_id}
+```
+
+Response:
+```json
+{
+  "job_id": "20260110_123456_abc12345",
+  "filename": "document.pdf",
+  "status": "processing",
+  "progress": 45.0,
+  "total_pages": 10,
+  "processed_pages": 4
+}
+```
+
+#### Download Result
+```bash
+curl http://localhost:8000/jobs/{job_id}/download -o result.md
+```
+
+### Default Prompts
+
+| Mode | Prompt |
+|------|--------|
+| Markdown | `<image>Convert the content of the image to markdown.` |
+| OCR | `<image>Extract all text from the image.` |
+| Grounding | `<image><|grounding|>Convert the document to markdown.` |
 
 ---
 
-## 💻 Client Integration Examples
+## 📁 Sample Scripts
 
-### Python Client
+The `samples/` directory contains minimal example scripts:
 
-```python
-import requests
+| Script | Description |
+|--------|-------------|
+| `sample_pdf_to_markdown.py` | Basic PDF to Markdown conversion |
+| `sample_pdf_to_ocr.py` | Plain text extraction |
+| `sample_custom_prompt.py` | Using custom prompts from YAML |
+| `sample_with_images.py` | Image extraction with ZIP output |
+| `sample_batch_process.py` | Process multiple PDFs from a folder |
 
-class DeepSeekOCRClient:
-    def __init__(self, base_url="http://localhost:8000"):
-        self.base_url = base_url
-    
-    def process_image(self, image_path):
-        with open(image_path, 'rb') as f:
-            response = requests.post(
-                f"{self.base_url}/ocr/image",
-                files={"file": f}
-            )
-        return response.json()
-    
-    def process_pdf(self, pdf_path):
-        with open(pdf_path, 'rb') as f:
-            response = requests.post(
-                f"{self.base_url}/ocr/pdf",
-                files={"file": f}
-            )
-        return response.json()
-
-# Usage
-client = DeepSeekOCRClient()
-result = client.process_pdf("document.pdf")
-
-if result["success"]:
-    for page_result in result["results"]:
-        print(f"Page {page_result['page_count']}:")
-        print(page_result["result"])
-        print("---")
-```
-
-### JavaScript Client
-
-```javascript
-class DeepSeekOCR {
-    constructor(baseUrl = 'http://localhost:8000') {
-        this.baseUrl = baseUrl;
-    }
-    
-    async processImage(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const response = await fetch(`${this.baseUrl}/ocr/image`, {
-            method: 'POST',
-            body: formData
-        });
-        
-        return await response.json();
-    }
-    
-    async processPDF(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const response = await fetch(`${this.baseUrl}/ocr/pdf`, {
-            method: 'POST',
-            body: formData
-        });
-        
-        return await response.json();
-    }
-}
-
-// Usage in browser
-const ocr = new DeepSeekOCR();
-document.getElementById('fileInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    const result = await ocr.processPDF(file);
-    
-    if (result.success) {
-        result.results.forEach(page => {
-            console.log(`Page ${page.page_count}:`, page.result);
-        });
-    }
-});
+```bash
+# Run a sample
+python samples/sample_pdf_to_markdown.py document.pdf
 ```
 
 ---
 
 ## ⚙️ Configuration
 
-### Custom Configuration and Critical Fixes
+### Docker Environment Variables
 
-This project includes custom files that replace the original DeepSeek-OCR library code to fix critical issues and provide enhanced functionality. These replacements are applied transparently during the Docker build process.
-
-#### 🚨 Critical Prompt Parameter Fix
-
-**Issue**: The original DeepSeek-OCR library has a bug where the `tokenize_with_images()` method is called without the required `prompt` parameter during model initialization, causing server startup failures.
-
-**Solution**: Custom run scripts have been created to properly handle the prompt parameter and prevent startup errors.
-
-#### Custom Files and Their Purpose
-
-The following custom files in the project root replace their counterparts during Docker build:
-
-- **`custom_config.py`**: Custom configuration with customizable default prompt and settings
-- **`custom_image_process.py`**: Fixed version of the image processing module that handles the prompt parameter correctly
-- **`custom_run_dpsk_ocr_pdf.py`**: Enhanced PDF script that accepts `--prompt` argument and fixes the initialization issue
-- **`custom_run_dpsk_ocr_image.py`**: Enhanced image script that accepts `--prompt` argument and fixes the initialization issue
-- **`custom_run_dpsk_ocr_eval_batch.py`**: Enhanced batch script that accepts `--prompt` argument and fixes the initialization issue
-
-These custom files are automatically copied over the original library files during the Docker build process, ensuring the fixes are applied without requiring manual intervention.
-
-#### Using Custom Configuration
-
-1. **Edit the Default Prompt**:
-   ```python
-   # Edit custom_config.py
-   PROMPT = '<image>\n<|grounding|>Your custom default prompt here.'
-   ```
-
-2. **Use Custom Prompts with Direct Scripts**:
-   ```bash
-   # Using default prompt from custom_config.py
-   python custom_run_dpsk_ocr_pdf.py --input your_file.pdf --output output_dir
-   
-   # Using custom prompt via command line
-   python custom_run_dpsk_ocr_pdf.py --prompt "<image>\n<|grounding|>Extract tables as CSV." --input your_file.pdf
-   ```
-
-3. **Use Custom Prompts with API**:
-   ```bash
-   # Using default prompt
-   curl -X POST "http://localhost:8000/ocr/pdf" -F "file=@your_file.pdf"
-   
-   # Using custom prompt
-   curl -X POST "http://localhost:8000/ocr/pdf" -F "file=@your_file.pdf" -F "prompt=<image>\n<|grounding|>Your custom prompt here."
-   ```
-
-4. **Build and Run**:
-   ```bash
-   # Rebuild with custom configuration and fixes
-   docker-compose build
-   
-   # Start the container
-   docker-compose up -d
-   ```
-
-#### Docker Build Process
-
-The Dockerfile automatically applies the custom files during the build process:
-
-```dockerfile
-# Copy custom files to replace the originals (transparent replacement approach)
-COPY custom_config.py ./DeepSeek-OCR-vllm/config.py
-COPY custom_image_process.py ./DeepSeek-OCR-vllm/process/image_process.py
-
-# Copy custom run scripts to replace the originals
-COPY custom_run_dpsk_ocr_pdf.py ./DeepSeek-OCR-vllm/run_dpsk_ocr_pdf.py
-COPY custom_run_dpsk_ocr_image.py ./DeepSeek-OCR-vllm/run_dpsk_ocr_image.py
-COPY custom_run_dpsk_ocr_eval_batch.py ./DeepSeek-OCR-vllm/run_dpsk_ocr_eval_batch.py
-```
-
-This transparent replacement approach ensures that:
-- The critical prompt parameter fix is applied
-- Custom configuration options are available
-- No manual modification of the original library code is required
-- The fixes persist across container rebuilds
-
-For detailed documentation, see **`CUSTOM_CONFIG_README.md`**.
-
-### Environment Variables
-
-Edit `docker-compose.yml` to adjust these settings:
+Edit `docker-compose.yml`:
 
 ```yaml
 environment:
-  - CUDA_VISIBLE_DEVICES=0                    # GPU device to use
-  - MODEL_PATH=/app/models/deepseek-ai/DeepSeek-OCR  # Model path
-  - MAX_CONCURRENCY=50                         # Max concurrent requests
-  - GPU_MEMORY_UTILIZATION=0.85                # GPU memory usage (0.1-1.0)
-```
-
-### Performance Tuning
-
-#### For High-Throughput Processing
-```yaml
-environment:
-  - MAX_CONCURRENCY=100
+  - CUDA_VISIBLE_DEVICES=0
+  - MODEL_PATH=/app/models/deepseek-ai/DeepSeek-OCR
+  - MAX_CONCURRENCY=1          # Keep at 1 for 8GB GPUs
+  - MAX_MODEL_LEN=2048         # Reduce for memory savings
   - GPU_MEMORY_UTILIZATION=0.95
+  - DTYPE=half                 # half, bfloat16, or float32
+  - BLOCK_SIZE=16              # KV cache block size
+  - MAX_TOKENS=1024            # Max output tokens per page
+  - PDF_DPI=96                 # PDF rendering DPI
+  - MAX_PAGES=0                # 0 = unlimited
+  - ENABLE_GUI=false           # Set to true for Docker GUI
 ```
 
-#### For Memory-Constrained Systems
+### Custom Prompts
+
+Create `custom_prompt.yaml`:
 ```yaml
-environment:
-  - MAX_CONCURRENCY=10
-  - GPU_MEMORY_UTILIZATION=0.7
+prompt: '<image>Extract all tables and format as CSV.'
+```
+
+Use with CLI:
+```bash
+python pdf_to_markdown_cli.py input.pdf --prompt custom_prompt.yaml
+```
+
+---
+
+## 🏗️ Project Structure
+
+```
+DeepSeek-OCR/
+├── GUI.py                     # Gradio web interface
+├── pdf_to_markdown_cli.py     # CLI tool
+├── Lib/                       # Shared Python library
+│   ├── config.py              # Configuration class
+│   ├── config_location.py     # Local environment settings
+│   ├── ocr_client.py          # API client
+│   ├── postprocessor.py       # Output post-processing
+│   └── file_utils.py          # File management utilities
+├── docker/                    # Docker-related files
+│   ├── start_server.py        # FastAPI server
+│   ├── entrypoint.py          # Container entrypoint
+│   ├── config_location.py     # Docker environment settings
+│   └── overrides/             # Files that override DeepSeek-OCR
+│       ├── config.py
+│       ├── deepseek_ocr.py
+│       └── ...
+├── samples/                   # Example scripts
+│   ├── sample_pdf_to_markdown.py
+│   ├── sample_pdf_to_ocr.py
+│   └── ...
+├── Dockerfile
+├── docker-compose.yml
+├── data/                      # Input/output directory
+│   ├── uploads/               # Uploaded files
+│   ├── results/               # Processing results
+│   └── images/                # Extracted images
+└── models/                    # Model weights (download separately)
+    └── deepseek-ai/
+        └── DeepSeek-OCR/
 ```
 
 ---
 
 ## 🔧 Troubleshooting
 
-### Common Issues
-
-#### 1. Out of Memory Errors
-```bash
-# Reduce concurrency and GPU memory usage
-# Edit docker-compose.yml:
+### Out of Memory Errors
+```yaml
+# Reduce memory usage in docker-compose.yml:
 environment:
-  - MAX_CONCURRENCY=10
-  - GPU_MEMORY_UTILIZATION=0.7
+  - MAX_CONCURRENCY=1
+  - MAX_MODEL_LEN=1024
+  - GPU_MEMORY_UTILIZATION=0.90
 ```
 
-#### 2. Model Loading Issues
+### Model Loading Issues
 ```bash
-# Check model directory structure
+# Check model directory
 ls -la models/deepseek-ai/DeepSeek-OCR/
 
-# Verify model files are present
-docker-compose exec deepseek-ocr ls -la /app/models/deepseek-ai/DeepSeek-OCR/
+# Check container logs
+docker-compose logs -f deepseek-ocr
 ```
 
-#### 3. CUDA Errors
+### API Connection Errors
+```bash
+# Check if API is running
+curl http://localhost:8000/health
+
+# Restart the service
+docker-compose restart
+```
+
+### GPU Not Detected
 ```bash
 # Check GPU availability
 nvidia-smi
@@ -616,152 +379,16 @@ nvidia-smi
 docker run --rm --gpus all nvidia/cuda:11.8-base-ubuntu20.04 nvidia-smi
 ```
 
-#### 4. API Connection Errors
-```bash
-# Check if the API is running
-curl http://localhost:8000/health
-
-# Check container logs
-docker-compose logs -f deepseek-ocr
-
-# Restart the service
-docker-compose restart deepseek-ocr
-```
-
-#### 5. PDF Processing Errors
-```bash
-# Check if PDF files are valid
-file data/your_document.pdf
-
-# Try processing a single PDF manually
-curl -X POST "http://localhost:8000/ocr/pdf" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@data/your_document.pdf"
-```
-
-#### 6. Prompt Parameter Error (Fixed)
-If you encounter this error during server startup:
-```
-TypeError: DeepseekOCRProcessor.tokenize_with_images() missing 1 required positional argument: 'prompt'
-```
-
-This error has been fixed with the custom files included in the Docker build. If you still see it:
-
-1. **Ensure you're using the updated Dockerfile** (includes custom run scripts)
-2. **Rebuild the container completely**:
-   ```bash
-   docker-compose down
-   docker-compose build --no-cache
-   docker-compose up -d
-   ```
-3. **Verify the fix is applied**:
-   ```bash
-   docker-compose exec deepseek-ocr ls -la /app/DeepSeek-OCR-vllm/run_dpsk_ocr_*.py
-   # These should show recent timestamps from the build
-   ```
-
-The fix ensures that the `tokenize_with_images()` method is called with the correct prompt parameter during model initialization.
-
-### Debug Mode
-
-For debugging, you can run the container with additional tools:
-
-```bash
-# Run with shell access
-docker-compose run --rm deepseek-ocr bash
-
-# Check model loading
-python -c "
-import sys
-sys.path.insert(0, '/app/DeepSeek-OCR-master/DeepSeek-OCR-vllm')
-from config import MODEL_PATH
-print(f'Model path: {MODEL_PATH}')
-print(f'Model exists: {os.path.exists(MODEL_PATH)}')
-"
-```
-
----
-
-## 📊 Performance Tips
-
-1. **Batch Processing**: Process multiple files at once using the `/ocr/batch` endpoint
-2. **Optimize DPI**: The default DPI of 144 provides good balance between quality and speed
-3. **GPU Utilization**: Adjust `GPU_MEMORY_UTILIZATION` based on your GPU capacity
-4. **Concurrency**: Increase `MAX_CONCURRENCY` for better throughput on powerful GPUs
-5. **File Size**: For large PDFs, consider splitting them into smaller chunks
-
----
-
-## 🏗️ Project Structure
-
-```
-DeepSeek-OCR/
-├── README.md                              # This file
-├── CUSTOM_CONFIG_README.md                # Custom configuration documentation
-├── pdf_to_markdown_processor.py           # Basic markdown conversion
-├── pdf_to_markdown_processor_enhanced.py  # Enhanced markdown with post-processing
-├── pdf_to_ocr_enhanced.py                # OCR text extraction
-├── pdf_to_custom_prompt.py                # Custom prompt processing (raw)
-├── pdf_to_custom_prompt_enhanced.py       # Custom prompt with post-processing
-├── custom_prompt.yaml                     # Configuration for custom prompts
-├── custom_config.py                       # Custom configuration (replaces original config.py)
-├── custom_image_process.py                # Fixed image processing (replaces original)
-├── custom_run_dpsk_ocr_pdf.py            # Custom PDF script with prompt support (replaces original)
-├── custom_run_dpsk_ocr_image.py          # Custom image script with prompt support (replaces original)
-├── custom_run_dpsk_ocr_eval_batch.py     # Custom batch script with prompt support (replaces original)
-├── test_custom_config.py                  # Test script for custom configuration
-├── start_server.py                        # FastAPI server
-├── Dockerfile                             # Docker container definition (includes custom files)
-├── docker-compose.yml                     # Docker compose configuration
-├── build.bat                              # Windows build script
-├── data/                                  # Input/output directory for PDFs
-│   ├── images/                            # Extracted images (when using enhanced processors)
-│   └── *.md                               # Generated markdown files
-├── models/                                # Model weights directory
-└── DeepSeek-OCR/                          # DeepSeek-OCR source code
-    └── DeepSeek-OCR-master/
-        └── DeepSeek-OCR-vllm/            # Original library files (replaced during build)
-```
-
 ---
 
 ## 📝 License
 
-This project follows the same license as the DeepSeek-OCR project. Please refer to the original project's license file for details.
+This project follows the same license as DeepSeek-OCR. See the [original repository](https://github.com/deepseek-ai/DeepSeek-OCR) for details.
 
 ---
 
 ## 🤝 Support
 
-For issues related to:
-- **Docker setup**: Check this README first
-- **DeepSeek-OCR model**: Refer to the [official repository](https://github.com/deepseek-ai/DeepSeek-OCR)
-- **vLLM**: Refer to [vLLM documentation](https://docs.vllm.ai/)
-
----
-
-## 🔄 Usage Workflow
-
-```mermaid
-graph TD
-    A[Start] --> B{Choose Method}
-    
-    B -->|Batch Processing| C[Place PDFs in data/ folder]
-    B -->|API Usage| D[Start Docker Container]
-    
-    C --> E[Run python pdf_to_markdown_processor.py]
-    D --> F[Use API endpoints]
-    
-    E --> G[Check data/ folder for .md files]
-    F --> H[Process results from API response]
-    
-    G --> I[Done]
-    H --> I
-    
-    style A fill:#e1f5fe
-    style I fill:#e8f5e8
-    style C fill:#fff3e0
-    style D fill:#fff3e0
-    style E fill:#f3e5f5
-    style F fill:#f3e5f5
+- **Docker/API issues**: Check this README
+- **DeepSeek-OCR model**: [Official repository](https://github.com/deepseek-ai/DeepSeek-OCR)
+- **vLLM**: [vLLM documentation](https://docs.vllm.ai/)

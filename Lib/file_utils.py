@@ -17,7 +17,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Union
 
-from .config import Config, get_config
+from .config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +29,14 @@ class FileManager:
     Handles file uploads, result storage, and file listing.
     """
     
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(self, config: Config):
         """
         Initialize the file manager.
         
         Args:
-            config: Configuration instance. If None, uses global config.
+            config: Configuration instance.
         """
-        self.config = config or get_config()
+        self.config = config
     
     @staticmethod
     def get_file_hash(file_path: Union[str, Path], length: int = 12) -> str:

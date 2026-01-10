@@ -5,16 +5,20 @@ Sample: PDF conversion with custom prompt
 Minimal example showing how to use a custom prompt from YAML file.
 """
 
+import sys
 from pathlib import Path
-from Lib import get_config, OCRClient, PostProcessor, FileManager
 import time
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from Lib import config, OCRClient, PostProcessor, FileManager
 
 
 def convert_with_custom_prompt(pdf_path: str, prompt_file: str = "custom_prompt.yaml"):
     """Convert PDF using a custom prompt from YAML file."""
     
     # Initialize components
-    config = get_config()
     client = OCRClient(config)
     postprocessor = PostProcessor(config)
     
@@ -47,7 +51,7 @@ def convert_with_custom_prompt(pdf_path: str, prompt_file: str = "custom_prompt.
     # Download and save result (raw, no post-processing for custom prompts)
     result, _ = client.download_result(job_id)
     
-    output_path = Path("data/results") / f"{Path(pdf_path).stem}_CUSTOM.md"
+    output_path = config.results_dir / f"{Path(pdf_path).stem}_CUSTOM.md"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(result, encoding='utf-8')
     
@@ -56,8 +60,6 @@ def convert_with_custom_prompt(pdf_path: str, prompt_file: str = "custom_prompt.
 
 
 if __name__ == "__main__":
-    import sys
-    
     if len(sys.argv) < 2:
         print("Usage: python sample_custom_prompt.py <pdf_path> [prompt_file.yaml]")
         sys.exit(1)

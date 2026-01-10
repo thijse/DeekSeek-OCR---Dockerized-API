@@ -20,7 +20,7 @@ import logging
 import time
 
 # Import from library
-from Lib import Config, get_config, OCRClient, PostProcessor, FileManager
+from Lib import config, OCRClient, PostProcessor, FileManager
 
 # Configure logging
 logging.basicConfig(
@@ -29,8 +29,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize configuration and components
-config = get_config()
+# Initialize components using the location-specific config
 client = OCRClient(config)
 postprocessor = PostProcessor(config)
 file_manager = FileManager(config)
@@ -543,10 +542,11 @@ with gr.Blocks(title="DeepSeek OCR", theme=gr.themes.Soft()) as demo:
 
 
 if __name__ == "__main__":
-    logger.info("Starting DeepSeek-OCR GUI...")
+    logger.info(f"Starting DeepSeek-OCR GUI ({config.environment})...")
+    logger.info(f"API: {config.api_base_url}, GUI port: {config.gui_port}")
     demo.queue()  # Enable queue for generator functions
     demo.launch(
-        server_name="0.0.0.0",
-        server_port=7862,
+        server_name=config.gui_host,
+        server_port=config.gui_port,
         share=False
     )

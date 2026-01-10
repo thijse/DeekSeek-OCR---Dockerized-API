@@ -5,16 +5,23 @@ Sample: PDF to Markdown conversion
 Minimal example showing how to convert PDFs to Markdown using the DeepSeek-OCR library.
 """
 
+import sys
 from pathlib import Path
-from Lib import get_config, OCRClient, PostProcessor, FileManager
 import time
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def convert_pdf(pdf_path: str, output_dir: str = "data/results"):
+from Lib import config, OCRClient, PostProcessor
+
+
+def convert_pdf(pdf_path: str, output_dir: str = None):
     """Convert a single PDF to Markdown."""
     
+    # Use config's results_dir if output_dir not specified
+    output_dir = output_dir or str(config.results_dir)
+    
     # Initialize components
-    config = get_config()
     client = OCRClient(config)
     postprocessor = PostProcessor(config)
     
@@ -69,8 +76,6 @@ def convert_pdf(pdf_path: str, output_dir: str = "data/results"):
 
 
 if __name__ == "__main__":
-    import sys
-    
     if len(sys.argv) < 2:
         print("Usage: python sample_pdf_to_markdown.py <pdf_path>")
         sys.exit(1)

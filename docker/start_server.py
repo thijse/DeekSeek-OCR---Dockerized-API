@@ -24,7 +24,7 @@ import uvicorn
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Form
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import torch
 import fitz  # PyMuPDF
 from PIL import Image
@@ -179,8 +179,43 @@ class SingleJobManager:
 
 app = FastAPI(
     title="DeepSeek-OCR API",
-    description="Single-job OCR service. Client manages queue.",
-    version="3.0.0"
+    description="""
+## DeepSeek-OCR PDF to Markdown Conversion API
+
+This API provides OCR (Optical Character Recognition) services using the DeepSeek-OCR model 
+to convert PDF documents to Markdown format.
+
+### Key Features
+- **Single-job processing**: The server processes one PDF at a time for optimal GPU memory usage
+- **Async job management**: Submit jobs and poll for progress
+- **Custom prompts**: Use default or custom prompts for different output formats
+- **Progress tracking**: Real-time page-by-page progress updates
+
+### Workflow
+1. **Check availability**: Call `GET /health` to verify the server is ready
+2. **Submit job**: Call `POST /jobs/create` with your PDF file
+3. **Poll status**: Call `GET /jobs/{job_id}` to track progress
+4. **Download result**: Call `GET /jobs/{job_id}/download` when complete
+
+### Default Prompts
+- **Markdown**: `<image>Convert the content of the image to markdown.`
+- **OCR**: `<image>Extract all text from the image.`
+- **Grounding**: `<image><|grounding|>Convert the document to markdown.`
+
+### Environment Variables
+- `MODEL_PATH`: Path to the DeepSeek-OCR model
+- `MAX_PAGES`: Maximum pages to process (0 = unlimited)
+- `PDF_DPI`: DPI for PDF rendering (default: 144)
+- `MAX_TOKENS`: Maximum output tokens per page
+""",
+    version="3.0.0",
+    contact={
+        "name": "DeepSeek-OCR API",
+        "url": "https://github.com/deepseek-ai/DeepSeek-OCR",
+    },
+    license_info={
+        "name": "MIT License",
+    },
 )
 
 app.add_middleware(
@@ -197,29 +232,67 @@ job_manager = SingleJobManager()
 
 
 class JobResponse(BaseModel):
-    job_id: str
-    filename: str
-    status: str
-    progress: float
-    total_pages: int
-    processed_pages: int
-    created_at: float
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
-    error: Optional[str] = None
+    """Response model for job status queries."""
+    job_id: str = Field(..., description="Unique identifier for the job")
+    filename: str = Field(..., description="Original filename of the uploaded PDF")
+    status: str = Field(..., description="Job status: 'processing', 'completed', or 'failed'")
+    progress: float = Field(..., description="Processing progress from 0.0 to 100.0")
+    total_pages: int = Field(..., description="Total number of pages in the PDF")
+    processed_pages: int = Field(..., description="Number of pages processed so far")
+    created_at: float = Field(..., description="Unix timestamp when job was created")
+    started_at: Optional[float] = Field(None, description="Unix timestamp when processing started")
+    completed_at: Optional[float] = Field(None, description="Unix timestamp when job completed")
+    error: Optional[str] = Field(None, description="Error message if job failed")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "job_id": "20260110_123456_abc12345",
+                "filename": "document.pdf",
+                "status": "processing",
+                "progress": 45.0,
+                "total_pages": 10,
+                "processed_pages": 4,
+                "created_at": 1736512345.123,
+                "started_at": 1736512345.456,
+                "completed_at": None,
+                "error": None
+            }
+        }
 
 
 class JobCreateResponse(BaseModel):
-    success: bool
-    job_id: Optional[str] = None
-    message: str
+    """Response model for job creation."""
+    success: bool = Field(..., description="Whether the job was created successfully")
+    job_id: Optional[str] = Field(None, description="Unique identifier for the created job")
+    message: str = Field(..., description="Status message with additional details")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "job_id": "20260110_123456_abc12345",
+                "message": "Job started. Total pages: 10"
+            }
+        }
 
 
 class HealthResponse(BaseModel):
-    status: str
-    available: bool
-    model_loaded: bool
-    current_job: Optional[JobResponse] = None
+    """Response model for health check endpoint."""
+    status: str = Field(..., description="Server status ('healthy' or 'unhealthy')")
+    available: bool = Field(..., description="Whether the server can accept new jobs")
+    model_loaded: bool = Field(..., description="Whether the OCR model is loaded and ready")
+    current_job: Optional[JobResponse] = Field(None, description="Details of currently processing job, if any")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "healthy",
+                "available": True,
+                "model_loaded": True,
+                "current_job": None
+            }
+        }
 
 
 def initialize_model():
@@ -404,12 +477,32 @@ async def startup_event():
     initialize_model()
 
 
-@app.get("/")
+@app.get("/", tags=["General"], include_in_schema=False)
 async def root():
-    return {"message": "DeepSeek-OCR API", "version": "3.0.0"}
+    """Root endpoint - redirects to docs."""
+    return {"message": "DeepSeek-OCR API", "version": "3.0.0", "docs": "/docs"}
 
 
-@app.get("/health", response_model=HealthResponse)
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["Health"],
+    summary="Check server health and availability",
+    description=""":
+Check if the server is healthy and available to accept new jobs.
+
+**Returns:**
+- `status`: Always "healthy" if server is responding
+- `available`: True if no job is currently processing
+- `model_loaded`: True if the OCR model is loaded
+- `current_job`: Details of the job being processed (if any)
+
+**Use this endpoint to:**
+- Verify the server is running
+- Check if you can submit a new job
+- Monitor progress of the current job
+"""
+)
 async def health_check():
     current_job_response = None
     if job_manager.current_job:
@@ -434,10 +527,41 @@ async def health_check():
     )
 
 
-@app.post("/jobs/create", response_model=JobCreateResponse)
+@app.post(
+    "/jobs/create",
+    response_model=JobCreateResponse,
+    tags=["Jobs"],
+    summary="Create a new OCR job",
+    description=""":
+Upload a PDF file to create a new OCR processing job.
+
+**Parameters:**
+- `file`: PDF file to process (required)
+- `prompt`: Custom prompt for OCR (optional)
+
+**Default prompts by use case:**
+- Markdown conversion: `<image>Convert the content of the image to markdown.`
+- Plain text OCR: `<image>Extract all text from the image.`
+- With layout info: `<image><|grounding|>Convert the document to markdown.`
+
+**Response:**
+- Returns immediately with job_id
+- Use `/jobs/{job_id}` to poll for progress
+- Use `/jobs/{job_id}/download` to get results
+
+**Error codes:**
+- `503`: Server busy (already processing a job)
+- `500`: Internal server error
+""",
+    responses={
+        200: {"description": "Job created successfully"},
+        503: {"description": "Server busy - try again later"},
+        500: {"description": "Internal server error"}
+    }
+)
 async def create_job_endpoint(
-    file: UploadFile = File(...),
-    prompt: Optional[str] = Form(None)
+    file: UploadFile = File(..., description="PDF file to process"),
+    prompt: Optional[str] = Form(None, description="Custom OCR prompt (optional)")
 ):
     if not job_manager.is_available():
         raise HTTPException(status_code=503, detail="Server busy - already processing a job. Try again later.")
@@ -456,8 +580,6 @@ async def create_job_endpoint(
         if error:
             raise HTTPException(status_code=503, detail=error)
         use_prompt = prompt if prompt else PROMPT
-        # Use asyncio.create_task to properly run async function in background
-        # This returns immediately, allowing the response to be sent
         asyncio.create_task(process_job_async(job_id, use_prompt))
         return JobCreateResponse(success=True, job_id=job_id, message=f"Job started. Total pages: {total_pages}")
     except HTTPException:
@@ -466,7 +588,35 @@ async def create_job_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/jobs/{job_id}", response_model=JobResponse)
+@app.get(
+    "/jobs/{job_id}",
+    response_model=JobResponse,
+    tags=["Jobs"],
+    summary="Get job status and progress",
+    description=""":
+Get the current status and progress of a processing job.
+
+**Parameters:**
+- `job_id`: The job ID returned from `/jobs/create`
+
+**Status values:**
+- `processing`: Job is currently being processed
+- `completed`: Job finished successfully - results ready for download
+- `failed`: Job failed - check `error` field for details
+
+**Progress:**
+- `progress`: Percentage complete (0-100)
+- `processed_pages`: Number of pages completed
+- `total_pages`: Total pages in the document
+
+**Polling recommendation:**
+- Poll every 2-5 seconds while status is "processing"
+""",
+    responses={
+        200: {"description": "Job status retrieved"},
+        404: {"description": "Job not found"}
+    }
+)
 async def get_job_status(job_id: str):
     job = await job_manager.get_job(job_id)
     if not job:
@@ -485,7 +635,31 @@ async def get_job_status(job_id: str):
     )
 
 
-@app.get("/jobs/{job_id}/download")
+@app.get(
+    "/jobs/{job_id}/download",
+    tags=["Jobs"],
+    summary="Download job results",
+    description=""":
+Download the Markdown result of a completed job.
+
+**Parameters:**
+- `job_id`: The job ID returned from `/jobs/create`
+
+**Returns:**
+- Markdown file with OCR results
+- Content-Type: text/markdown
+- Filename: `{original_filename}.md`
+
+**Note:**
+- Job must be in "completed" status
+- Results are available until the next job completes
+""",
+    responses={
+        200: {"description": "Markdown file", "content": {"text/markdown": {}}},
+        400: {"description": "Job not completed yet"},
+        404: {"description": "Job or result not found"}
+    }
+)
 async def download_job_result(job_id: str):
     job = await job_manager.get_job(job_id)
     if not job:

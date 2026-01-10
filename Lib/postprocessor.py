@@ -20,7 +20,7 @@ from typing import List, Tuple, Optional
 import fitz  # PyMuPDF
 from PIL import Image
 
-from .config import Config, get_config
+from .config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +33,14 @@ class PostProcessor:
     and performing various text cleanups.
     """
     
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(self, config: Config):
         """
         Initialize the post-processor.
         
         Args:
-            config: Configuration instance. If None, uses global config.
+            config: Configuration instance.
         """
-        self.config = config or get_config()
+        self.config = config
     
     @staticmethod
     def match_tags(text: str) -> Tuple[List, List[str], List[str]]:

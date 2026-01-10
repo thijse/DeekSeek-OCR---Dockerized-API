@@ -3,21 +3,24 @@ services:
     build: .
     container_name: deepseek-ocr-vllm
     ports:
-      - "8000:8000"
+      - "8000:8000"   # API server
+      - "7863:7863"   # GUI (when enabled)
     volumes:
-      - ./models:/app/models  # Mount directory for model weights
-      - ./outputs:/app/outputs  # Mount directory for output files
+      - ./models:/app/models      # Mount directory for model weights
+      - ./outputs:/app/outputs    # Mount directory for output files
+      - ./data:/app/data          # Mount directory for uploads/results/images
     environment:
       - CUDA_VISIBLE_DEVICES=0
-      - MODEL_PATH=/app/models/deepseek-ai/DeepSeek-OCR  # Update with your model path
-      - MAX_CONCURRENCY=1  # 8GB GPUs: keep concurrency minimal to avoid KV cache OOM
-      - MAX_MODEL_LEN=2048  # 8GB GPUs: reduce max sequence length to shrink KV cache
-      - GPU_MEMORY_UTILIZATION=0.95  # Allow vLLM to use more of the remaining memory
-      - DTYPE=${DTYPE:-}  # Optional dtype override: 'half' | 'bfloat16' | 'float32'; empty = auto-detect
-      - BLOCK_SIZE=16  # Force small KV cache page size supported by xFormers on Turing GPUs
-      - MAX_TOKENS=1024  # Cap generation length for faster responses
-      - PDF_DPI=96  # Lower DPI for faster PDF rasterization during /ocr/pdf
-      - MAX_PAGES=0  # 0 or unset = process all pages
+      - MODEL_PATH=/app/models/deepseek-ai/DeepSeek-OCR
+      - MAX_CONCURRENCY=1         # 8GB GPUs: keep concurrency minimal to avoid KV cache OOM
+      - MAX_MODEL_LEN=2048        # 8GB GPUs: reduce max sequence length to shrink KV cache
+      - GPU_MEMORY_UTILIZATION=0.95
+      - DTYPE=${DTYPE:-}          # Optional dtype override: 'half' | 'bfloat16' | 'float32'
+      - BLOCK_SIZE=16             # Force small KV cache page size for Turing GPUs
+      - MAX_TOKENS=1024           # Cap generation length for faster responses
+      - PDF_DPI=96                # Lower DPI for faster PDF rasterization
+      - MAX_PAGES=0               # 0 = process all pages
+      - ENABLE_GUI=${ENABLE_GUI:-false}  # Set to 'true' to enable GUI on port 7863
     deploy:
       resources:
         reservations:

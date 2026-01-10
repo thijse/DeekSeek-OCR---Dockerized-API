@@ -23,6 +23,22 @@ COPY docker/overrides/run_dpsk_ocr_eval_batch.py ./DeepSeek-OCR-vllm/run_dpsk_oc
 # Copy the API server startup script
 COPY docker/start_server.py .
 
+# Copy the Lib directory (shared library code)
+COPY Lib/config.py ./Lib/config.py
+COPY Lib/ocr_client.py ./Lib/ocr_client.py
+COPY Lib/postprocessor.py ./Lib/postprocessor.py
+COPY Lib/file_utils.py ./Lib/file_utils.py
+COPY Lib/__init__.py ./Lib/__init__.py
+
+# Copy Docker-specific config_location.py (overwrites any local version)
+COPY docker/config_location.py ./Lib/config_location.py
+
+# Copy the GUI for optional internal use
+COPY GUI.py .
+
+# Copy the entrypoint script (Python version to avoid line ending issues)
+COPY docker/entrypoint.py .
+
 # Copy requirements file and install additional dependencies
 COPY DeepSeek-OCR/requirements.txt .
 
@@ -34,13 +50,18 @@ RUN pip install --no-cache-dir \
     easydict \
     addict \
     Pillow \
-    numpy
+    numpy \
+    pyyaml \
+    requests
 
 # Install additional dependencies for the API server
 RUN pip install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn[standard]==0.24.0 \
     python-multipart==0.0.6
+
+# Install Gradio for optional GUI
+RUN pip install --no-cache-dir gradio==3.50.2
 
 # Install flash-attn for optimal performance (if not already included)
 RUN pip install --no-cache-dir flash-attn==2.7.3 --no-build-isolation || echo "flash-attn may already be installed"
@@ -49,16 +70,14 @@ RUN pip install --no-cache-dir flash-attn==2.7.3 --no-build-isolation || echo "f
 RUN pip install --no-cache-dir tokenizers==0.13.3 || echo "Using existing tokenizers version"
 
 # Add the DeepSeek-OCR directory to PYTHONPATH
-ENV PYTHONPATH="/app/DeepSeek-OCR-vllm:${PYTHONPATH}"
+ENV PYTHONPATH="/app/DeepSeek-OCR-vllm:/app:${PYTHONPATH}"
 
-# Create directories for outputs
-RUN mkdir -p /app/outputs
+# Create directories for outputs and data
+RUN mkdir -p /app/outputs /app/data/uploads /app/data/results /app/data/images
 
-# Make the scripts executable
-RUN chmod +x /app/start_server.py
+# Expose ports (API and GUI)
+EXPOSE 8000 7863
 
-# Expose the API port
-EXPOSE 8000
-
-# Set the default command to use our custom server
-ENTRYPOINT ["/usr/bin/python3", "/app/start_server.py"]
+# Override the base image entrypoint completely
+ENTRYPOINT []
+CMD ["python3", "/app/entrypoint.py"]
