@@ -171,4 +171,9 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
+## Visual studio	
+.vs/
+
 # End of https://www.toptal.com/developers/gitignore/api/python
+/copilot_chat_cleaned 2.md
+/copilot_chat_cleaned.md

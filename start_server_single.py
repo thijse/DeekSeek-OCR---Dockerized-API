@@ -12,7 +12,6 @@ import io
 import tempfile
 import uuid
 import time
-import json
 import shutil
 from typing import List, Optional
 from pathlib import Path
@@ -22,7 +21,7 @@ from enum import Enum
 
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Form
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
@@ -351,8 +350,8 @@ def process_single_image(image: Image.Image, prompt: str = PROMPT) -> str:
     }
     outputs = llm.generate([request_item], sampling_params=sampling_params)
     result = outputs[0].outputs[0].text
-    if '<|endofsentence|>' in result:
-        result = result.replace('<|endofsentence|>', '')
+    if '<｜end▁of▁sentence｜>' in result:
+        result = result.replace('<｜end▁of▁sentence｜>', '')
     return result
 
 
@@ -379,13 +378,10 @@ async def process_job_async(job_id: str, prompt: str):
             await job_manager.fail_job("No images extracted from PDF")
             return
         results = []
-        loop = asyncio.get_event_loop()
         for page_num, image in enumerate(images):
             try:
                 print(f"[INFO] Processing page {page_num + 1}/{len(images)} for job {job_id}")
-                # Run the blocking LLM call in a thread pool to not block the event loop
-                # This allows the server to respond to status polling requests
-                result = await loop.run_in_executor(None, process_single_image, image, prompt)
+                result = process_single_image(image, prompt)
                 results.append(result)
                 await job_manager.update_progress(page_num + 1)
             except Exception as e:
@@ -437,7 +433,8 @@ async def health_check():
 @app.post("/jobs/create", response_model=JobCreateResponse)
 async def create_job_endpoint(
     file: UploadFile = File(...),
-    prompt: Optional[str] = Form(None)
+    prompt: Optional[str] = Form(None),
+    background_tasks: BackgroundTasks = None
 ):
     if not job_manager.is_available():
         raise HTTPException(status_code=503, detail="Server busy - already processing a job. Try again later.")
@@ -456,9 +453,7 @@ async def create_job_endpoint(
         if error:
             raise HTTPException(status_code=503, detail=error)
         use_prompt = prompt if prompt else PROMPT
-        # Use asyncio.create_task to properly run async function in background
-        # This returns immediately, allowing the response to be sent
-        asyncio.create_task(process_job_async(job_id, use_prompt))
+        background_tasks.add_task(process_job_async, job_id, use_prompt)
         return JobCreateResponse(success=True, job_id=job_id, message=f"Job started. Total pages: {total_pages}")
     except HTTPException:
         raise
@@ -500,5 +495,4 @@ async def download_job_result(job_id: str):
 
 if __name__ == "__main__":
     print("Starting DeepSeek-OCR API server (Single-Job Mode)...")
-    uvicorn.run("start_server:app", host="0.0.0.0", port=8000, reload=False, workers=1)
-
+    uvicorn.run("start_server_single:app", host="0.0.0.0", port=8000, reload=False, workers=1)
