@@ -14,19 +14,13 @@ Features:
 """
 
 import gradio as gr
-import os
-import yaml
-import json
-import shutil
-import hashlib
 from pathlib import Path
-from datetime import datetime
 from typing import Optional
 import logging
 import time
 
 # Import from library
-from Lib import Config, get_config, OCRClient, PostProcessor
+from Lib import Config, get_config, OCRClient, PostProcessor, FileManager
 
 # Configure logging
 logging.basicConfig(
@@ -39,6 +33,7 @@ logger = logging.getLogger(__name__)
 config = get_config()
 client = OCRClient(config)
 postprocessor = PostProcessor(config)
+file_manager = FileManager(config)
 
 # Global cancel flag
 cancel_requested = False
@@ -46,98 +41,6 @@ cancel_requested = False
 # Global queue state
 file_queue = []
 processing_status = {"current": "", "progress": 0, "is_processing": False}
-
-
-# =============================================================================
-# File Management Functions
-# =============================================================================
-
-def get_file_hash(file_path):
-    """Get MD5 hash of a file for caching"""
-    hasher = hashlib.md5()
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(65536), b''):
-            hasher.update(chunk)
-    return hasher.hexdigest()[:12]
-
-
-def save_uploaded_file(pdf_file):
-    """Save uploaded PDF to uploads directory"""
-    if pdf_file is None:
-        return None
-    
-    try:
-        source_path = Path(pdf_file.name if hasattr(pdf_file, 'name') else pdf_file)
-        filename = source_path.name
-        file_hash = get_file_hash(source_path)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        new_filename = f"{timestamp}_{file_hash}_{filename}"
-        dest_path = config.upload_dir / new_filename
-        shutil.copy(source_path, dest_path)
-        logger.info(f"Saved uploaded file: {dest_path}")
-        return str(dest_path)
-    except Exception as e:
-        logger.error(f"Error saving uploaded file: {str(e)}")
-        return None
-
-
-def save_result(filename, result_text, mode, prompt, job_id=None, metadata=None):
-    """Save processing result to results directory"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_name = Path(filename).stem
-    result_filename = f"{base_name}_{timestamp}_MD.md"
-    result_path = config.results_dir / result_filename
-    
-    with open(result_path, 'w', encoding='utf-8') as f:
-        f.write(result_text)
-    
-    meta_filename = f"{base_name}_{timestamp}_MD_meta.json"
-    meta_path = config.results_dir / meta_filename
-    
-    meta_data = {
-        "original_filename": filename,
-        "processing_mode": mode,
-        "prompt_used": prompt,
-        "timestamp": timestamp,
-        "result_file": result_filename,
-        "job_id": job_id
-    }
-    if metadata:
-        meta_data.update(metadata)
-    
-    with open(meta_path, 'w', encoding='utf-8') as f:
-        json.dump(meta_data, f, indent=2)
-    
-    logger.info(f"Saved result: {result_path}")
-    return str(result_path)
-
-
-def load_custom_prompt():
-    """Load custom prompt from YAML file"""
-    yaml_path = Path("custom_prompt.yaml")
-    if not yaml_path.exists():
-        return "❌ custom_prompt.yaml not found"
-    
-    try:
-        with open(yaml_path, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f)
-            if 'prompt' in data:
-                return data['prompt']
-            else:
-                return "❌ No 'prompt' key found in YAML"
-    except Exception as e:
-        return f"❌ Error loading YAML: {str(e)}"
-
-
-def list_previous_results():
-    """List all previous result files"""
-    try:
-        results = list(config.results_dir.glob("*_MD.md"))
-        results.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-        return [str(r) for r in results[:50]]
-    except Exception as e:
-        logger.error(f"Error listing results: {str(e)}")
-        return []
 
 
 # =============================================================================
@@ -159,8 +62,11 @@ def add_to_queue(pdf_files, current_queue):
         if pdf_file is None:
             continue
         
-        # Save uploaded file
-        saved_path = save_uploaded_file(pdf_file)
+        # Get source path from Gradio file object
+        source_path = Path(pdf_file.name if hasattr(pdf_file, 'name') else pdf_file)
+        
+        # Save uploaded file using FileManager
+        saved_path = file_manager.save_uploaded_file(source_path, source_path.name)
         if saved_path:
             # Get page count
             page_count = OCRClient.get_pdf_page_count(saved_path)
@@ -347,8 +253,8 @@ def process_queue(queue, processing_mode, custom_prompt_text, extract_images, re
                 if zip_path:
                     all_image_zips.append(zip_path)
                 
-                # Save result to local file
-                result_file_path = save_result(
+                # Save result using FileManager
+                result_file_path = file_manager.save_result(
                     filename,
                     cleaned_text,
                     processing_mode,
@@ -392,17 +298,29 @@ def process_queue(queue, processing_mode, custom_prompt_text, extract_images, re
     yield final_msg, "", format_queue_display(file_queue), all_result_files or None, all_image_zips or None
 
 
+# =============================================================================
+# UI Helper Functions
+# =============================================================================
+
 def load_previous_result(result_path):
     """Load a previous result file"""
     if not result_path:
         return "", "No file selected"
     
-    try:
-        with open(result_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+    content = file_manager.load_result(result_path)
+    if content is not None:
         return content, f"Loaded: {Path(result_path).name}"
-    except Exception as e:
-        return "", f"Error loading file: {str(e)}"
+    else:
+        return "", f"Error loading file"
+
+
+def load_custom_prompt():
+    """Load custom prompt from YAML file"""
+    prompt = FileManager.load_custom_prompt()
+    if prompt:
+        return prompt
+    else:
+        return "❌ custom_prompt.yaml not found or invalid"
 
 
 def check_api_status():
@@ -419,7 +337,7 @@ def update_prompt_visibility(processing_mode):
 
 def refresh_file_lists():
     """Refresh the list of previous results"""
-    return gr.update(choices=list_previous_results())
+    return gr.update(choices=file_manager.list_results())
 
 
 def request_cancel():
@@ -508,7 +426,7 @@ with gr.Blocks(title="DeepSeek OCR", theme=gr.themes.Soft()) as demo:
             gr.Markdown("### 📂 Previous Results")
             prev_results = gr.Dropdown(
                 label="Load Previous Result",
-                choices=list_previous_results(),
+                choices=file_manager.list_results(),
                 interactive=True
             )
             with gr.Row():
