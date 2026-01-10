@@ -2,21 +2,36 @@
 """
 DeepSeek-OCR Gradio Interface
 
-A web interface for converting PDF files to Markdown or OCR text using the DeepSeek OCR API.
-Supports multiple processing modes:
-- Markdown conversion (structured document)
-- OCR extraction (plain text)
-- Custom prompt processing (user-defined YAML prompt)
+A web interface for converting PDF files to Markdown using the DeepSeek OCR API.
+Features:
+- Async job submission with progress tracking
+- Multiple processing modes (Markdown, OCR, Custom Prompt)
+- Queue system - add files one by one, process sequentially  
+- Real-time progress updates with async polling
+- Image extraction with ZIP download
+- Auto-cleans custom tags
+- File and result persistence
 """
 
 import gradio as gr
 import requests
-import base64
-import tempfile
 import os
+import re
+import io
 import yaml
+import json
+import shutil
+import hashlib
+import urllib.parse
+import zipfile
+import fitz  # PyMuPDF
 from pathlib import Path
+from datetime import datetime
+from typing import List, Tuple, Optional
 import logging
+import time
+import threading
+from PIL import Image
 
 # Configure logging
 logging.basicConfig(
@@ -25,313 +40,300 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Configuration
+API_BASE_URL = os.environ.get('OCR_API_URL', 'http://localhost:8000')
+UPLOAD_DIR = Path("data/uploads")
+RESULTS_DIR = Path("data/results")
+IMAGES_DIR = Path("data/images")
+POLL_INTERVAL = 2  # seconds
 
-class DeepSeekOCRClient:
-    """Client for interacting with DeepSeek OCR API"""
+# Create directories
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+# Global cancel flag
+cancel_requested = False
+
+# Global queue state
+file_queue = []
+processing_status = {"current": "", "progress": 0, "is_processing": False}
+
+
+class AsyncOCRClient:
+    """Client for interacting with async DeepSeek OCR API"""
     
-    def __init__(self, api_base_url: str = "http://localhost:8000"):
+    def __init__(self, api_base_url=API_BASE_URL):
         self.api_base_url = api_base_url
         self.health_endpoint = f"{api_base_url}/health"
-        self.pdf_endpoint = f"{api_base_url}/ocr/pdf"
+        self.create_job_endpoint = f"{api_base_url}/jobs/create"
+        self.job_status_endpoint = f"{api_base_url}/jobs/{{job_id}}"
+        self.download_endpoint = f"{api_base_url}/jobs/{{job_id}}/download"
+        self.metadata_endpoint = f"{api_base_url}/jobs/{{job_id}}/metadata"
+        # In single-job mode we do not use list/cancel endpoints
     
     def check_health(self):
         """Check if the API is healthy"""
         try:
-            response = requests.get(self.health_endpoint, timeout=5)
+            response = requests.get(self.health_endpoint, timeout=10)
             if response.status_code == 200:
                 data = response.json()
-                return True, f"API is healthy. Model: {data.get('model_name', 'Unknown')}"
+                return True, self._format_health_info(data), data.get("available", True)
             else:
-                return False, f"API returned status code: {response.status_code}"
+                return False, f"❌ API returned status code: {response.status_code}", False
         except requests.exceptions.RequestException as e:
-            return False, f"Cannot connect to API: {str(e)}"
+            return False, f"❌ Cannot connect to API: {str(e)}", False
     
-    def process_pdf(self, pdf_path, prompt, progress=None):
-        """
-        Process a PDF file with the specified prompt
-        
-        Args:
-            pdf_path: Path to the PDF file
-            prompt: The prompt to use for processing
-            progress: Gradio progress tracker
-            
-        Returns:
-            Tuple of (success, result_text)
-        """
+    def _format_health_info(self, data):
+        """Format health check data"""
+        available = data.get("available", True)
+        status_icon = "✅" if available else "⏳"
+        info = f"{status_icon} API healthy | Available: {available}\n"
+        info += f"Model: deepseek-ai/DeepSeek-OCR"
+        current_job = data.get("current_job")
+        if current_job:
+            info += f"\nActive job: {current_job.get('job_id', '')} ({current_job.get('progress', 0):.0f}% )"
+        return info
+    
+    def create_job(self, pdf_path: str, prompt: str, timeout: int = 120):
+        """Create a new OCR job"""
         try:
-            # Update progress
-            if progress:
-                progress(0.1, desc="Reading PDF file...")
-            
-            # Read the PDF file
             with open(pdf_path, 'rb') as f:
-                pdf_data = f.read()
-            
-            if progress:
-                progress(0.3, desc="Uploading to API...")
-            
-            # Prepare the multipart form data
-            files = {
-                'file': ('document.pdf', pdf_data, 'application/pdf')
-            }
-            data = {
-                'prompt': prompt
-            }
-            
-            if progress:
-                progress(0.5, desc="Processing PDF...")
-            
-            # Make the API request
-            response = requests.post(
-                self.pdf_endpoint,
-                files=files,
-                data=data,
-                timeout=300  # 5 minutes timeout
-            )
-            
-            if progress:
-                progress(0.9, desc="Formatting results...")
-            
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('success'):
-                    markdown_text = result.get('result', '')
-                    page_count = result.get('page_count', 0)
-                    
-                    if progress:
-                        progress(1.0, desc="Complete!")
-                    
-                    return True, f"✅ Successfully processed {page_count} page(s)\n\n{markdown_text}"
-                else:
-                    error = result.get('error', 'Unknown error')
-                    return False, f"❌ Processing failed: {error}"
-            else:
-                return False, f"❌ API error: Status code {response.status_code}\n{response.text}"
+                files = {'file': (os.path.basename(pdf_path), f, 'application/pdf')}
+                data = {'prompt': prompt}
                 
+                logger.info(f"Creating job for {pdf_path}...")
+                response = requests.post(
+                    self.create_job_endpoint,
+                    files=files,
+                    data=data,
+                    timeout=timeout
+                )
+            
+            if response.status_code == 503:
+                return None, "Server busy - already processing a job"
+            if response.status_code != 200:
+                return None, f"Error: Status code {response.status_code}\n{response.text}"
+            
+            result = response.json()
+            if result.get('success'):
+                job_id = result.get('job_id')
+                logger.info(f"Job created: {job_id}")
+                return job_id, None
+            else:
+                return None, "Job creation failed"
+        
         except Exception as e:
-            logger.error(f"Error processing PDF: {str(e)}")
-            return False, f"❌ Error: {str(e)}"
+            logger.error(f"Error creating job: {str(e)}")
+            return None, f"Error: {str(e)}"
+    
+    def get_job_status(self, job_id: str, timeout: int = 10):
+        """Get status of a job"""
+        try:
+            url = self.job_status_endpoint.format(job_id=job_id)
+            response = requests.get(url, timeout=timeout)
+            
+            if response.status_code == 404:
+                return None, "Job not found"
+            elif response.status_code != 200:
+                return None, f"Error: Status code {response.status_code}"
+            
+            return response.json(), None
+        
+        except Exception as e:
+            logger.error(f"Error getting job status: {str(e)}")
+            return None, f"Error: {str(e)}"
+    
+    def download_result(self, job_id: str, timeout: int = 30):
+        """Download job result as text"""
+        try:
+            url = self.download_endpoint.format(job_id=job_id)
+            response = requests.get(url, timeout=timeout)
+            
+            if response.status_code != 200:
+                return None, f"Error: Status code {response.status_code}\n{response.text}"
+            
+            logger.info(f"Result downloaded for job {job_id}")
+            return response.content.decode('utf-8'), None
+        
+        except Exception as e:
+            logger.error(f"Error downloading result: {str(e)}")
+            return None, f"Error: {str(e)}"
+    
+    def get_pdf_page_count(self, pdf_path):
+        """Get the number of pages in a PDF"""
+        try:
+            doc = fitz.open(pdf_path)
+            count = doc.page_count
+            doc.close()
+            return count
+        except Exception as e:
+            logger.warning(f"Could not get page count: {e}")
+            return None
+
+    def check_available(self):
+        """Return (available: bool, message: str)"""
+        ok, msg, available = self.check_health()
+        return available if ok else False, msg
 
 
-# Initialize the client
-client = DeepSeekOCRClient()
+# Initialize client
+client = AsyncOCRClient()
 
 
-def load_custom_prompt():
-    """Load custom prompt from YAML file"""
+# =============================================================================
+# Post-Processing Functions  
+# =============================================================================
+
+def re_match_tags(text: str) -> Tuple[List, List, List]:
+    """Match reference patterns in the text"""
+    pattern = r'(<\|ref\|>(.*?)<\|/ref\|><\|det\|>(.*?)<\|/det\|>)'
+    matches = re.findall(pattern, text, re.DOTALL)
+    
+    matches_image = []
+    matches_other = []
+    
+    for a_match in matches:
+        if '<|ref|>image<|/ref|>' in a_match[0]:
+            matches_image.append(a_match[0])
+        else:
+            matches_other.append(a_match[0])
+    
+    return matches, matches_image, matches_other
+
+
+def pdf_to_images(pdf_path: str, dpi: int = 144) -> List[Image.Image]:
+    """Convert PDF pages to PIL Images"""
+    images = []
+    
     try:
-        custom_prompt_file = "custom_prompt.yaml"
-        if os.path.exists(custom_prompt_file):
-            with open(custom_prompt_file, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f)
-                return data.get('prompt', '<image>\nFree OCR.')
-        return '<image>\nFree OCR.'
+        pdf_document = fitz.open(pdf_path)
+        zoom = dpi / 72.0
+        matrix = fitz.Matrix(zoom, zoom)
+        
+        for page_num in range(pdf_document.page_count):
+            page = pdf_document[page_num]
+            pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+            img_data = pixmap.tobytes("png")
+            img = Image.open(io.BytesIO(img_data))
+            images.append(img)
+        
+        pdf_document.close()
     except Exception as e:
-        logger.warning(f"Could not load custom prompt: {e}")
-        return '<image>\nFree OCR.'
-
-
-def process_pdf_interface(pdf_file, processing_mode, custom_prompt_text, progress=gr.Progress()):
-    """
-    Process PDF file based on selected mode
+        logger.error(f"Error converting PDF to images: {str(e)}")
     
-    Args:
-        pdf_file: Uploaded PDF file
-        processing_mode: One of "Markdown", "OCR", or "Custom Prompt"
-        custom_prompt_text: Custom prompt text (only used in Custom Prompt mode)
-        progress: Gradio progress tracker
+    return images
+
+
+def extract_and_save_images(pdf_path: str, content: str) -> Tuple[str, List[str]]:
+    """Extract images from content based on coordinate tags"""
+    extracted_paths = []
+    
+    pdf_images = pdf_to_images(pdf_path)
+    if not pdf_images:
+        _, matches_images, _ = re_match_tags(content)
+        for tag in matches_images:
+            content = content.replace(tag, '[Image]', 1)
+        return content, []
+    
+    _, matches_images, _ = re_match_tags(content)
+    total_extracted = 0
+    
+    for img_idx, img_tag in enumerate(matches_images):
+        try:
+            pattern = r'<\|ref\|>image<\|/ref\|><\|det\|>(.*?)<\|/det\|>'
+            det_match = re.search(pattern, img_tag)
+            
+            if det_match:
+                det_content = det_match.group(1)
+                try:
+                    coordinates = eval(det_content)
+                    page_to_use = img_idx % len(pdf_images) if len(pdf_images) > 1 else 0
+                    page_image = pdf_images[page_to_use]
+                    image_width, image_height = page_image.size
+                    
+                    for points in coordinates:
+                        x1, y1, x2, y2 = points
+                        x1 = int(x1 / 999 * image_width)
+                        y1 = int(y1 / 999 * image_height)
+                        x2 = int(x2 / 999 * image_width)
+                        y2 = int(y2 / 999 * image_height)
+                        
+                        if x1 >= x2 or y1 >= y2:
+                            continue
+                        
+                        cropped = page_image.crop((x1, y1, x2, y2))
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                        image_filename = f"{Path(pdf_path).stem}_img{total_extracted}_{timestamp}.jpg"
+                        image_path = IMAGES_DIR / image_filename
+                        cropped.save(image_path)
+                        extracted_paths.append(str(image_path))
+                        
+                        encoded_filename = urllib.parse.quote(image_filename)
+                        markdown_link = f"\n![Extracted Image](images/{encoded_filename})\n"
+                        content = content.replace(img_tag, markdown_link, 1)
+                        
+                        total_extracted += 1
+                        break
+                except Exception as e:
+                    logger.error(f"Error processing image coordinates: {str(e)}")
+                    content = content.replace(img_tag, '[Image - extraction failed]', 1)
+        except Exception as e:
+            logger.error(f"Error extracting image: {str(e)}")
+            content = content.replace(img_tag, '[Image - error]', 1)
+    
+    return content, extracted_paths
+
+
+def create_images_zip(image_paths: List[str], pdf_filename: str) -> Optional[str]:
+    """Create a zip file containing extracted images"""
+    if not image_paths:
+        return None
+    
+    base_name = Path(pdf_filename).stem
+    zip_filename = f"{base_name}_images.zip"
+    zip_path = RESULTS_DIR / zip_filename
+    
+    try:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for img_path in image_paths:
+                zipf.write(img_path, Path(img_path).name)
         
-    Returns:
-        Tuple of (status_message, result_text)
-    """
-    if pdf_file is None:
-        return "⚠️ Please upload a PDF file", ""
+        logger.info(f"Created images zip: {zip_path} with {len(image_paths)} images")
+        return str(zip_path)
+    except Exception as e:
+        logger.error(f"Error creating images zip: {str(e)}")
+        return None
+
+
+def clean_content(content: str, extract_images: bool = False, pdf_path: str = None, remove_page_splits: bool = False) -> Tuple[str, List[str]]:
+    """Clean up the OCR content by removing special tags"""
+    extracted_images = []
     
-    # Check API health first
-    is_healthy, health_msg = client.check_health()
-    if not is_healthy:
-        return f"⚠️ API Error: {health_msg}\n\nPlease ensure the DeepSeek-OCR API is running at http://localhost:8000", ""
+    if not content:
+        return content, []
     
-    # Determine the prompt based on processing mode
-    if processing_mode == "Markdown":
-        prompt = '<image>\n<|grounding|>Convert the document to markdown.'
-    elif processing_mode == "OCR":
-        prompt = '<image>\nFree OCR.'
-    elif processing_mode == "Custom Prompt":
-        if not custom_prompt_text.strip():
-            return "⚠️ Please enter a custom prompt", ""
-        prompt = custom_prompt_text
+    if '<｜end▁of▁sentence｜>' in content:
+        content = content.replace('<｜end▁of▁sentence｜>', '')
+    
+    if extract_images and pdf_path:
+        content, extracted_images = extract_and_save_images(pdf_path, content)
     else:
-        return "⚠️ Invalid processing mode", ""
+        _, matches_images, _ = re_match_tags(content)
+        for tag in matches_images:
+            content = content.replace(tag, '', 1)
     
-    # Process the PDF
-    success, result = client.process_pdf(pdf_file.name, prompt, progress)
+    _, _, matches_other = re_match_tags(content)
+    for tag in matches_other:
+        content = content.replace(tag, '')
     
-    if success:
-        status = f"✅ Processing complete!\n\nMode: {processing_mode}\nPrompt: {prompt}"
-        return status, result
-    else:
-        return result, ""
-
-
-def check_api_status():
-    """Check and return API status"""
-    is_healthy, msg = client.check_health()
-    if is_healthy:
-        return f"✅ {msg}"
-    else:
-        return f"❌ {msg}"
-
-
-def update_prompt_visibility(processing_mode):
-    """Show/hide custom prompt textbox based on processing mode"""
-    is_custom = (processing_mode == "Custom Prompt")
-    return gr.update(visible=is_custom)
-
-
-# Create the Gradio interface
-with gr.Blocks(title="DeepSeek-OCR PDF Converter", theme=gr.themes.Soft()) as app:
-    gr.Markdown("""
-    # 📄 DeepSeek-OCR PDF Converter
+    content = re.sub(r'<\|ref\|>[^<]*$', '', content)
+    content = re.sub(r'<\|det\|>[^<]*$', '', content)
+    content = re.sub(r'<\|ref\|>\w+<\|/ref\|><\|det\|>\[\[[\d\s,\.]*$', '', content)
+    content = re.sub(r'<\|ref\|>(?![^<]*<\|/ref\|>)', '', content)
+    content = re.sub(r'<\|det\|>(?![^<]*<\|/det\|>)', '', content)
     
-    Convert PDF documents to Markdown or extract text using DeepSeek-OCR API.
+    if remove_page_splits:
+        content = re.sub(r'\n*<-+\s*Page\s*Split\s*-+>\n*', '\n\n', content, flags=re.IGNORECASE)
     
-    **Supported Modes:**
-    - **Markdown**: Preserves document structure (headings, paragraphs, formatting)
-    - **OCR**: Extracts plain text without formatting
-    - **Custom Prompt**: Use your own processing prompt
-    """)
-    
-    with gr.Row():
-        with gr.Column(scale=1):
-            # API Status
-            api_status = gr.Textbox(
-                label="API Status",
-                value=check_api_status(),
-                interactive=False,
-                lines=2
-            )
-            refresh_btn = gr.Button("🔄 Refresh Status", size="sm")
-            
-            gr.Markdown("---")
-            
-            # File upload
-            pdf_input = gr.File(
-                label="Upload PDF File",
-                file_types=[".pdf"],
-                type="filepath"
-            )
-            
-            # Processing mode
-            processing_mode = gr.Radio(
-                choices=["Markdown", "OCR", "Custom Prompt"],
-                value="Markdown",
-                label="Processing Mode",
-                info="Select how to process the PDF"
-            )
-            
-            # Custom prompt input (initially hidden)
-            custom_prompt_input = gr.Textbox(
-                label="Custom Prompt",
-                placeholder="Enter your custom prompt here...\nExample: <image>\nExtract all tables.",
-                lines=3,
-                visible=False,
-                info="Loaded from custom_prompt.yaml or enter your own"
-            )
-            
-            # Load custom prompt button
-            load_prompt_btn = gr.Button("📂 Load from custom_prompt.yaml", size="sm", visible=False)
-            
-            # Process button
-            process_btn = gr.Button("🚀 Process PDF", variant="primary", size="lg")
-        
-        with gr.Column(scale=2):
-            # Status message
-            status_output = gr.Textbox(
-                label="Status",
-                interactive=False,
-                lines=3
-            )
-            
-            # Result output
-            result_output = gr.Textbox(
-                label="Result",
-                interactive=False,
-                lines=20,
-                max_lines=50,
-                show_copy_button=True
-            )
-    
-    gr.Markdown("""
-    ---
-    ### 📝 Instructions
-    
-    1. **Start the API**: Ensure the DeepSeek-OCR API is running on `http://localhost:8000`
-       - Using Docker: `docker-compose up -d`
-       - Check status with the Refresh button above
-    
-    2. **Upload PDF**: Click the upload area and select a PDF file
-    
-    3. **Choose Mode**: Select your preferred processing mode
-       - **Markdown**: Best for documents with structure
-       - **OCR**: Best for simple text extraction
-       - **Custom Prompt**: Use your own processing instructions
-    
-    4. **Process**: Click "Process PDF" and wait for results
-    
-    5. **Copy Results**: Use the copy button to save the output
-    
-    ### 🔧 Tips
-    
-    - For large PDFs, processing may take several minutes
-    - The API must be running before processing
-    - Custom prompts should start with `<image>` tag
-    - Results can be saved directly from the text box
-    """)
-    
-    # Event handlers
-    refresh_btn.click(
-        fn=check_api_status,
-        outputs=api_status
-    )
-    
-    processing_mode.change(
-        fn=update_prompt_visibility,
-        inputs=processing_mode,
-        outputs=custom_prompt_input
-    ).then(
-        fn=lambda mode: gr.update(visible=(mode == "Custom Prompt")),
-        inputs=processing_mode,
-        outputs=load_prompt_btn
-    )
-    
-    load_prompt_btn.click(
-        fn=load_custom_prompt,
-        outputs=custom_prompt_input
-    )
-    
-    process_btn.click(
-        fn=process_pdf_interface,
-        inputs=[pdf_input, processing_mode, custom_prompt_input],
-        outputs=[status_output, result_output]
-    )
-
-
-# Launch the app
-if __name__ == "__main__":
-    # Check API on startup
-    is_healthy, msg = client.check_health()
-    if is_healthy:
-        logger.info(f"✅ API is ready: {msg}")
-    else:
-        logger.warning(f"⚠️ API not available: {msg}")
-        logger.warning("Please start the DeepSeek-OCR API: docker-compose up -d")
-    
-    # Launch Gradio
-    app.launch(
-        server_name="127.0.0.1",  # Localhost only
-        server_port=7861,  # Using 7861 to avoid port conflicts
-        share=False,  # Don't create public link by default
-        show_error=True,
-        inbrowser=True  # Automatically open in browser
-    )
+    content = content.replace('\\coloneqq', ':=')

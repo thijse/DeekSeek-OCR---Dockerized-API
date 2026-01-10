@@ -1,6 +1,8 @@
 @echo off
-echo Building 
-environment...
+echo ========================================
+echo  DeepSeek-OCR Setup Script
+echo ========================================
+echo.
 
 REM Check if DeepSeek-OCR directory exists
 if not exist "DeepSeek-OCR" (
@@ -60,35 +62,42 @@ if not exist "models\deepseek-ai\DeepSeek-OCR" (
 )
 huggingface-cli download deepseek-ai/DeepSeek-OCR --local-dir models/deepseek-ai/DeepSeek-OCR
 
-
-REM Install package in editable mode from requirements.txt
+REM Install dependencies from requirements.txt
 if exist "requirements.txt" (
-    echo Installing package and dependencies from requirements.txt...
+    echo Installing dependencies from requirements.txt...
     pip install -r requirements.txt
     if errorlevel 1 (
-        echo Failed to install package and dependencies.
+        echo Failed to install dependencies.
         pause
         exit /b 1
     )
-    echo Package and dependencies installed successfully.
+    echo Dependencies installed successfully.
 ) else (
     echo requirements.txt not found! Cannot install dependencies.
     pause
     exit /b 1
 )
 
+echo.
+echo ========================================
+echo  Setup Complete!
+echo ========================================
+echo.
+echo Next steps:
+echo   1. Build Docker:  build.bat
+echo   2. Start Docker:  docker-compose up -d
+echo   3. Start GUI:     python GUI.py
+echo   4. Open browser:  http://localhost:7862
+echo.
 
 REM Check if we're already in an activated virtual environment
 if "%VIRTUAL_ENV%"=="" (
-    echo.
     echo Starting new command prompt with activated virtual environment...
     echo Type 'exit' to close this window.
     echo.
     cmd /k
 ) else (
-    echo.
     echo Virtual environment is already active in current session.
-    echo You can continue working in this environment.
     pause
 )
 

@@ -1,13 +1,44 @@
-# DeepSeek-OCR PDF Converter (Enhanced) - Application Documentation
+# DeepSeek-OCR PDF Converter - Application Documentation
 
 ## Overview
 
-**GUI_enhanced.py** is a feature-rich Gradio web interface for converting PDF documents to Markdown or extracting text using the DeepSeek-OCR API. This application was developed through an iterative process to address real-world document processing needs.
+**GUI.py** is a feature-rich Gradio web interface for converting PDF documents to Markdown or extracting text using the DeepSeek-OCR API. This application was developed through an iterative process to address real-world document processing needs.
 
-**Version:** Enhanced Edition  
 **Framework:** Gradio 3.50.2  
 **Backend:** DeepSeek-OCR API (Docker)  
 **Port:** 7862
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GRADIO WEB CLIENT                            │
+│                    (GUI.py - Port 7862)                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  • File Queue (client-side)                              │   │
+│  │  • Sequential processing (one file at a time)            │   │
+│  │  • Post-processing (tag cleanup, image extraction)       │   │
+│  │  • Progress tracking via polling                         │   │
+│  │  • Downloads: Markdown files + Image ZIPs                │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ HTTP API
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│               DOCKER: DeepSeek-OCR Server                       │
+│                (start_server.py - Port 8000)                    │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  • Single-job mode (ONE job at a time)                   │   │
+│  │  • Returns 503 if busy                                   │   │
+│  │  • /health - availability + current job progress         │   │
+│  │  • /jobs/create - submit PDF + prompt                    │   │
+│  │  • /jobs/{id} - get status/progress                      │   │
+│  │  • /jobs/{id}/download - get result                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 

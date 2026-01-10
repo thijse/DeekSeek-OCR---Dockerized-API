@@ -1,4 +1,6 @@
 requests
 huggingface_hub
-"gradio==3.50.2"
+gradio==3.50.2
 pyyaml
+PyMuPDF
+Pillow
