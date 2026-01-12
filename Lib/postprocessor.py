@@ -1,12 +1,4 @@
-"""
-Post-processing utilities for DeepSeek-OCR output.
-
-Handles:
-- Tag cleanup (ref, det, image tags)
-- Image extraction from PDF based on coordinates
-- Page split removal
-- Special character cleanup
-"""
+"""Post-processing utilities for DeepSeek-OCR output."""
 
 import re
 import io
@@ -26,33 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 class PostProcessor:
-    """
-    Post-processor for DeepSeek-OCR output.
-    
-    Cleans up OCR output by removing special tags, extracting images,
-    and performing various text cleanups.
-    """
+    """Post-processor for DeepSeek-OCR output."""
     
     def __init__(self, config: Config):
-        """
-        Initialize the post-processor.
-        
-        Args:
-            config: Configuration instance.
-        """
         self.config = config
     
     @staticmethod
     def match_tags(text: str) -> Tuple[List, List[str], List[str]]:
-        """
-        Match reference patterns in the text.
-        
-        Args:
-            text: The text to search
-            
-        Returns:
-            Tuple of (all_matches, image_matches, other_matches)
-        """
+        """Match reference patterns. Returns (all_matches, image_matches, other_matches)."""
         pattern = r'(<\|ref\|>(.*?)<\|/ref\|><\|det\|>(.*?)<\|/det\|>)'
         matches = re.findall(pattern, text, re.DOTALL)
         
@@ -68,16 +41,7 @@ class PostProcessor:
         return matches, matches_image, matches_other
     
     def pdf_to_images(self, pdf_path: str, dpi: Optional[int] = None) -> List[Image.Image]:
-        """
-        Convert PDF pages to PIL Images.
-        
-        Args:
-            pdf_path: Path to the PDF file
-            dpi: DPI for rendering (default: from config)
-            
-        Returns:
-            List of PIL Image objects
-        """
+        """Convert PDF pages to PIL Images."""
         dpi = dpi or self.config.default_dpi
         images = []
         

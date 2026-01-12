@@ -1,8 +1,4 @@
-"""
-OCR API Client for DeepSeek-OCR.
-
-Handles all communication with the DeepSeek-OCR API server.
-"""
+"""OCR API client for DeepSeek-OCR."""
 
 import os
 import logging
@@ -17,25 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class OCRClient:
-    """
-    Client for interacting with the DeepSeek-OCR API.
-    
-    Supports single-job mode where the server processes one job at a time.
-    The client is responsible for queuing and sequential processing.
-    """
+    """Client for the DeepSeek-OCR API. Single-job mode only."""
     
     def __init__(self, config: Config):
-        """
-        Initialize the OCR client.
-        
-        Args:
-            config: Configuration instance.
-        """
         self.config = config
         self._setup_endpoints()
     
     def _setup_endpoints(self):
-        """Set up API endpoint URLs."""
         base = self.config.api_base_url
         self.health_endpoint = f"{base}/health"
         self.create_job_endpoint = f"{base}/jobs/create"
@@ -44,12 +28,7 @@ class OCRClient:
         self.metadata_endpoint = f"{base}/jobs/{{job_id}}/metadata"
     
     def check_health(self) -> Tuple[bool, str, bool]:
-        """
-        Check if the API is healthy.
-        
-        Returns:
-            Tuple of (is_healthy, message, is_available)
-        """
+        """Check API health. Returns (is_healthy, message, is_available)."""
         try:
             response = requests.get(
                 self.health_endpoint, 
@@ -64,10 +43,9 @@ class OCRClient:
             return False, f"? Cannot connect to API: {str(e)}", False
     
     def _format_health_info(self, data: Dict[str, Any]) -> str:
-        """Format health check data for display."""
         available = data.get("available", True)
-        status_icon = "?" if available else "?"
-        info = f"{status_icon} API healthy | Available: {available}\n"
+        status = "OK" if available else "BUSY"
+        info = f"[{status}] API healthy | Available: {available}\n"
         info += f"Model: deepseek-ai/DeepSeek-OCR"
         current_job = data.get("current_job")
         if current_job:
@@ -75,26 +53,12 @@ class OCRClient:
         return info
     
     def check_available(self) -> Tuple[bool, str]:
-        """
-        Check if the server is available to accept a new job.
-        
-        Returns:
-            Tuple of (is_available, message)
-        """
+        """Check if server can accept a new job."""
         ok, msg, available = self.check_health()
         return available if ok else False, msg
     
     def create_job(self, pdf_path: str, prompt: str) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Create a new OCR job.
-        
-        Args:
-            pdf_path: Path to the PDF file
-            prompt: Processing prompt
-            
-        Returns:
-            Tuple of (job_id, error_message). job_id is None on error.
-        """
+        """Create OCR job. Returns (job_id, error_message)."""
         try:
             with open(pdf_path, 'rb') as f:
                 files = {'file': (os.path.basename(pdf_path), f, 'application/pdf')}
@@ -129,15 +93,7 @@ class OCRClient:
             return None, f"Error: {str(e)}"
     
     def get_job_status(self, job_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-        """
-        Get the status of a job.
-        
-        Args:
-            job_id: The job ID to check
-            
-        Returns:
-            Tuple of (status_data, error_message). status_data is None on error.
-        """
+        """Get job status. Returns (status_data, error_message)."""
         try:
             url = self.job_status_endpoint.format(job_id=job_id)
             response = requests.get(url, timeout=self.config.api_timeout_status)
@@ -157,15 +113,7 @@ class OCRClient:
             return None, f"Error: {str(e)}"
     
     def download_result(self, job_id: str) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Download the result of a completed job.
-        
-        Args:
-            job_id: The job ID to download
-            
-        Returns:
-            Tuple of (result_text, error_message). result_text is None on error.
-        """
+        """Download job result. Returns (result_text, error_message)."""
         try:
             url = self.download_endpoint.format(job_id=job_id)
             response = requests.get(url, timeout=self.config.api_timeout_download)
@@ -184,15 +132,7 @@ class OCRClient:
             return None, f"Error: {str(e)}"
     
     def get_job_metadata(self, job_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-        """
-        Get metadata for a completed job.
-        
-        Args:
-            job_id: The job ID
-            
-        Returns:
-            Tuple of (metadata, error_message). metadata is None on error.
-        """
+        """Get job metadata. Returns (metadata, error_message)."""
         try:
             url = self.metadata_endpoint.format(job_id=job_id)
             response = requests.get(url, timeout=self.config.api_timeout_status)
@@ -208,15 +148,7 @@ class OCRClient:
     
     @staticmethod
     def get_pdf_page_count(pdf_path: str) -> Optional[int]:
-        """
-        Get the number of pages in a PDF file.
-        
-        Args:
-            pdf_path: Path to the PDF file
-            
-        Returns:
-            Number of pages, or None on error
-        """
+        """Get PDF page count or None on error."""
         try:
             doc = fitz.open(pdf_path)
             count = doc.page_count

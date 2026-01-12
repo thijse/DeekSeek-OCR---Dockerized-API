@@ -1,12 +1,4 @@
-"""
-File management utilities for DeepSeek-OCR.
-
-Handles:
-- File hashing for deduplication
-- Upload file management
-- Result storage and retrieval
-- Custom prompt loading
-"""
+"""File management utilities for DeepSeek-OCR."""
 
 import hashlib
 import shutil
@@ -23,33 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class FileManager:
-    """
-    File management utilities for DeepSeek-OCR.
-    
-    Handles file uploads, result storage, and file listing.
-    """
+    """File management for uploads, results, and file listing."""
     
     def __init__(self, config: Config):
-        """
-        Initialize the file manager.
-        
-        Args:
-            config: Configuration instance.
-        """
         self.config = config
     
     @staticmethod
     def get_file_hash(file_path: Union[str, Path], length: int = 12) -> str:
-        """
-        Get MD5 hash of a file for deduplication/caching.
-        
-        Args:
-            file_path: Path to the file
-            length: Length of hash to return (default: 12 characters)
-            
-        Returns:
-            Truncated MD5 hash string
-        """
+        """Get MD5 hash of file (truncated to length chars)."""
         hasher = hashlib.md5()
         with open(file_path, 'rb') as f:
             for chunk in iter(lambda: f.read(65536), b''):
@@ -61,18 +34,7 @@ class FileManager:
         source_path: Union[str, Path],
         original_filename: Optional[str] = None
     ) -> Optional[str]:
-        """
-        Save an uploaded file to the uploads directory.
-        
-        Creates a unique filename with timestamp and hash to avoid collisions.
-        
-        Args:
-            source_path: Path to the source file
-            original_filename: Original filename (if different from source)
-            
-        Returns:
-            Path to the saved file, or None on error
-        """
+        """Save uploaded file with unique timestamp+hash name. Returns path or None on error."""
         try:
             source_path = Path(source_path)
             filename = original_filename or source_path.name

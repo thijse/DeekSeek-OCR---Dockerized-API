@@ -1,25 +1,12 @@
 #!/usr/bin/env python3
-"""
-DeepSeek-OCR Command Line Interface
+"""DeepSeek-OCR Command Line Interface
 
-CLI tool for converting PDF files to Markdown using the DeepSeek-OCR API.
-
-Features:
-- Single PDF or batch processing
-- Multiple processing modes (Markdown, OCR, Custom Prompt)
-- Post-processing options (tag cleanup, image extraction, page split removal)
-- Progress display
-- Input from file list
-- Configurable output directory
+CLI tool for converting PDF files to Markdown.
 
 Usage:
     python pdf_to_markdown_cli.py input.pdf
     python pdf_to_markdown_cli.py input.pdf -o output/
     python pdf_to_markdown_cli.py folder/ --batch
-    python pdf_to_markdown_cli.py --list files.txt
-    python pdf_to_markdown_cli.py input.pdf --mode ocr
-    python pdf_to_markdown_cli.py input.pdf --prompt custom_prompt.yaml
-    python pdf_to_markdown_cli.py input.pdf --extract-images --no-page-splits
 """
 
 import argparse
@@ -36,7 +23,7 @@ from Lib import Config, config, OCRClient, PostProcessor, FileManager
 
 
 class Colors:
-    """ANSI color codes for terminal output"""
+    """ANSI color codes"""
     RED = '\033[31m'
     GREEN = '\033[32m'
     YELLOW = '\033[33m'
@@ -47,7 +34,7 @@ class Colors:
 
 
 class PDFConverter:
-    """PDF to Markdown converter using DeepSeek-OCR API."""
+    """PDF to Markdown converter."""
     
     # Predefined prompts for different modes
     PROMPTS = {
@@ -62,15 +49,6 @@ class PDFConverter:
         output_dir: Optional[str] = None,
         verbose: bool = False
     ):
-        """
-        Initialize the converter.
-        
-        Args:
-            api_host: API server host
-            api_port: API server port
-            output_dir: Output directory (default: same as input)
-            verbose: Enable verbose logging
-        """
         # Configure logging
         log_level = logging.DEBUG if verbose else logging.INFO
         logging.basicConfig(

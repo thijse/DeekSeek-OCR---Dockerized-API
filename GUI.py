@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
-"""
-DeepSeek-OCR Gradio Interface
+"""DeepSeek-OCR Gradio Interface
 
-A web interface for converting PDF files to Markdown using the DeepSeek OCR API.
-Features:
-- Async job submission with progress tracking
-- Multiple processing modes (Markdown, OCR, Custom Prompt)
-- Queue system - add files one by one, process sequentially  
-- Real-time progress updates with async polling
-- Image extraction with ZIP download
-- Auto-cleans custom tags
-- File and result persistence
+Web interface for converting PDF files to Markdown using the DeepSeek OCR API.
 """
 
 import gradio as gr
@@ -34,17 +25,10 @@ client = OCRClient(config)
 postprocessor = PostProcessor(config)
 file_manager = FileManager(config)
 
-# Global cancel flag
 cancel_requested = False
-
-# Global queue state
 file_queue = []
 processing_status = {"current": "", "progress": 0, "is_processing": False}
 
-
-# =============================================================================
-# Queue Management Functions
-# =============================================================================
 
 def add_to_queue(pdf_files, current_queue):
     """Add files to the queue"""
@@ -90,11 +74,11 @@ def add_to_queue(pdf_files, current_queue):
 def format_queue_display(queue):
     """Format queue for display"""
     if not queue:
-        return "📭 Queue is empty - drop PDF files above"
+        return "Queue is empty - drop PDF files above"
     
-    display = f"📋 **Queue ({len(queue)} file(s))**\n\n"
+    display = f"**Queue ({len(queue)} file(s))**\n\n"
     for i, item in enumerate(queue, 1):
-        status = item.get("status", "⏳ Pending")
+        status = item.get("status", "Pending")
         filename = item.get("filename", "Unknown")
         pages = item.get("pages", "?")
         job_id = item.get("job_id", "")
@@ -120,12 +104,8 @@ def clear_completed():
     return format_queue_display(file_queue)
 
 
-# =============================================================================
-# Main Processing Function
-# =============================================================================
-
 def process_queue(queue, processing_mode, custom_prompt_text, extract_images, remove_page_splits):
-    """Process all files in the queue with async job management - ONE AT A TIME"""
+    """Process all files in the queue - ONE AT A TIME"""
     global cancel_requested, file_queue, processing_status
     
     cancel_requested = False
