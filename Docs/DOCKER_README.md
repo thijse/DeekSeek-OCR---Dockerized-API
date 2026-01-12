@@ -1,6 +1,6 @@
 # DeepSeek-OCR vLLM Docker Deployment
 
-This Docker setup provides a complete DeepSeek-OCR service with vLLM backend, ready for production use.
+This Docker setup provides a complete DeepSeek-OCR service with vLLM backend
 
 ## Prerequisites
 
@@ -306,15 +306,6 @@ print(f'Model exists: {os.path.exists(MODEL_PATH)}')
 "
 ```
 
-## Production Deployment
-
-### Security Considerations
-
-1. **Network Security**: Use reverse proxy (nginx/traefik) with SSL
-2. **Authentication**: Add API key authentication
-3. **Rate Limiting**: Implement request rate limiting
-4. **Input Validation**: Validate file types and sizes
-
 ### Monitoring
 
 ```bash
@@ -361,10 +352,7 @@ For issues related to:
 - **DeepSeek-OCR model**: Refer to the [official repository](https://github.com/deepseek-ai/DeepSeek-OCR)
 - **vLLM**: Refer to [vLLM documentation](https://docs.vllm.ai/)
 
-## License
-
-This Docker setup follows the same license as the DeepSeek-OCR project. Please refer to the original project's license file for details.
-GPU configuration guide (Turing/Volta vs Ampere/Ada/Hopper)
+## Configurations
 
 This project’s server dynamically adapts to the GPU class via configuration. No code changes are required to switch between older pre-Ampere GPUs and newer Ampere/Ada/Hopper GPUs. The selection logic and tunables are controlled through environment variables and auto-detection in the server.
 
