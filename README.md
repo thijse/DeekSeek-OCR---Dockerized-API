@@ -1,5 +1,4 @@
-![](/Docs/DeepSeek-OCR.png)
-# DeepSeek-OCR: PDF to Markdown Converter
+![DeepSeek-OCR: PDF to Markdown Converter](/Docs/DeepSeek-OCR.png)
 
 A DeepSeek-OCR-based solution that converts PDF documents to Markdown format. This project provides a REST API, Web GUI, and CLI tool.
 
