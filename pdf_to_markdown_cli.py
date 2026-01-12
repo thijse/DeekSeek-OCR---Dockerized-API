@@ -2,7 +2,7 @@
 """
 DeepSeek-OCR Command Line Interface
 
-A comprehensive CLI tool for converting PDF files to Markdown using the DeepSeek-OCR API.
+CLI tool for converting PDF files to Markdown using the DeepSeek-OCR API.
 
 Features:
 - Single PDF or batch processing
