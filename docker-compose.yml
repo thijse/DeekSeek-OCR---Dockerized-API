@@ -20,7 +20,7 @@ services:
       - MAX_TOKENS=1024           # Cap generation length for faster responses
       - PDF_DPI=96                # Lower DPI for faster PDF rasterization
       - MAX_PAGES=0               # 0 = process all pages
-      - ENABLE_GUI=${ENABLE_GUI:-false}  # Set to 'true' to enable GUI on port 7863
+      - ENABLE_GUI=true    # Set to 'true' to enable GUI on port 7863
     deploy:
       resources:
         reservations:

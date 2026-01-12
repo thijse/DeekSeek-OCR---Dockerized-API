@@ -1,18 +1,19 @@
+![](http://Docs/DeepSeek-OCR.png)
 # DeepSeek-OCR: PDF to Markdown Converter
 
-A powerful OCR solution that converts PDF documents to Markdown format using DeepSeek-OCR with a FastAPI backend. This project provides a REST API, Web GUI, and CLI tool for flexible document conversion.
+A DeepSeek-OCR-based solution that converts PDF documents to Markdown format. This project provides a REST API, Web GUI, and CLI tool.
 
-## 🌟 Features
+## Features
 
 - **REST API** - Async job-based processing with progress tracking
 - **Web GUI** - Gradio interface for easy file uploads and queue management
 - **CLI Tool** - Command-line interface for batch processing
 - **Docker** - Fully containerized with optional GUI
-- **8GB GPU Support** - Optimized for consumer GPUs (RTX 2070/3060/4060)
+- **Modest GPU Support** - works for older GPUs (RTX 2070, etc)
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Download Model Weights
 
@@ -40,7 +41,16 @@ curl http://localhost:8000/health
 
 ### 3. Use the Service
 
-**Option A: Web GUI (Local)**
+**Option A: Web GUI (running inside of Docker)**
+```bash
+# Start with GUI enabled inside Docker
+Set Enable GUI to true in docker-compose.yml (default)
+docker-compose up -d
+
+# Open http://localhost:7863
+```
+
+**Option B: Web GUI (Local)**
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -50,13 +60,6 @@ python GUI.py
 # Open http://localhost:7862
 ```
 
-**Option B: Web GUI (Docker)**
-```bash
-# Start with GUI enabled inside Docker
-ENABLE_GUI=true docker-compose up -d
-# Open http://localhost:7863
-```
-
 **Option C: CLI Tool**
 ```bash
 python pdf_to_markdown_cli.py document.pdf -o output/
@@ -64,7 +67,7 @@ python pdf_to_markdown_cli.py document.pdf -o output/
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
 ### Hardware Requirements
 - **NVIDIA GPU** with CUDA support
@@ -80,7 +83,7 @@ python pdf_to_markdown_cli.py document.pdf -o output/
 
 ---
 
-## 🔗 URLs & Endpoints
+## URLs & Endpoints
 
 | Service | URL | Description |
 |---------|-----|-------------|
@@ -92,7 +95,7 @@ python pdf_to_markdown_cli.py document.pdf -o output/
 
 ---
 
-## 🌐 Web GUI
+## Web GUI
 
 The Gradio web interface provides:
 - Drag & drop PDF upload
@@ -110,9 +113,6 @@ python GUI.py
 
 ### Docker GUI
 ```bash
-# Enable GUI in docker-compose
-ENABLE_GUI=true docker-compose up -d
-
 # Or set in docker-compose.yml:
 # environment:
 #   - ENABLE_GUI=true
@@ -120,7 +120,7 @@ ENABLE_GUI=true docker-compose up -d
 
 ---
 
-## 💻 CLI Tool
+## CLI Tool
 
 The CLI tool (`pdf_to_markdown_cli.py`) supports all processing options:
 
@@ -175,7 +175,7 @@ python pdf_to_markdown_cli.py input.pdf -v
 
 ---
 
-## 🔌 REST API
+## REST API
 
 The API uses an async job-based workflow:
 
@@ -246,7 +246,6 @@ curl http://localhost:8000/jobs/{job_id}/download -o result.md
 |------|--------|
 | Markdown | `<image>Convert the content of the image to markdown.` |
 | OCR | `<image>Extract all text from the image.` |
-| Grounding | `<image><|grounding|>Convert the document to markdown.` |
 
 ---
 
@@ -304,7 +303,7 @@ python pdf_to_markdown_cli.py input.pdf --prompt custom_prompt.yaml
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 DeepSeek-OCR/
@@ -341,7 +340,7 @@ DeepSeek-OCR/
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Out of Memory Errors
 ```yaml
@@ -381,13 +380,13 @@ docker run --rm --gpus all nvidia/cuda:11.8-base-ubuntu20.04 nvidia-smi
 
 ---
 
-## 📝 License
+## License
 
 This project follows the same license as DeepSeek-OCR. See the [original repository](https://github.com/deepseek-ai/DeepSeek-OCR) for details.
 
 ---
 
-## 🤝 Support
+## Support
 
 - **Docker/API issues**: Check this README
 - **DeepSeek-OCR model**: [Official repository](https://github.com/deepseek-ai/DeepSeek-OCR)
