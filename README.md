@@ -2,6 +2,8 @@
 
 A DeepSeek-OCR-based solution that converts PDF documents to Markdown format. This project provides a REST API, Web GUI, and CLI tool.
 
+This is an update on the great work of [Bogdanovich77/DeekSeek-OCR---Dockerized-API](https://github.com//Bogdanovich77/DeekSeek-OCR---Dockerized-API)
+
 ## Features
 
 - **REST API** - Async job-based processing with progress tracking
@@ -267,7 +269,7 @@ python samples/sample_pdf_to_markdown.py document.pdf
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Docker Environment Variables
 
