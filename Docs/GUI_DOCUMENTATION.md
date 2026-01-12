@@ -2,7 +2,7 @@
 
 ## Overview
 
-**GUI.py** is a feature-rich Gradio web interface for converting PDF documents to Markdown or extracting text using the DeepSeek-OCR API. This application was developed through an iterative process to address real-world document processing needs.
+**GUI.py** is a Gradio web interface for converting PDF documents to Markdown or extracting text using the DeepSeek-OCR API. 
 
 **Framework:** Gradio 3.50.2  
 **Backend:** DeepSeek-OCR API (Docker)  
@@ -42,85 +42,6 @@
 
 ---
 
-## Features Summary
-
-### 🚀 Core Functionality
-| Feature | Description |
-|---------|-------------|
-| PDF to Markdown | Convert PDF documents to clean, formatted Markdown |
-| OCR Mode | Extract raw text from PDF documents |
-| Custom Prompt | Use custom instructions for specialized extraction |
-| Multi-file Processing | Process multiple PDFs sequentially in a queue |
-
-### 📋 Queue System
-| Feature | Description |
-|---------|-------------|
-| Drag & Drop | Drop PDF files directly - auto-added to queue |
-| Batch Upload | Add multiple files at once |
-| Queue Display | Visual list showing file names, page counts, and status |
-| Clear All | Remove all items from queue |
-| Clear Done | Remove only completed/failed items |
-| Add While Processing | Drop new files even during active processing |
-
-### 🔄 Progress & Timing
-| Feature | Description |
-|---------|-------------|
-| Real-time Progress | Live percentage updates during processing |
-| Adaptive Timing | Learns actual processing speed and adjusts estimates |
-| ETA Display | Shows estimated time remaining |
-| Progress Clamping | Stops at 100% and recalibrates time/page when exceeded |
-| Per-file Stats | Shows elapsed time and seconds/page for each file |
-
-### 🧹 Post-Processing & Cleanup
-| Feature | Description |
-|---------|-------------|
-| Tag Cleanup | Removes `<\|ref\|>`, `<\|det\|>`, `<\|/ref\|>`, `<\|/det\|>` tags |
-| Incomplete Tag Handling | Cleans truncated tags at end of output |
-| End-of-sentence Token | Removes `<｜end▁of▁sentence｜>` markers |
-| Page Split Removal | Optional removal of `<--- Page Split --->` markers |
-| LaTeX Symbol Cleanup | Converts `\coloneqq` → `:=`, `\eqqcolon` → `=:` |
-| Excessive Newline Cleanup | Normalizes multiple blank lines |
-
-### 🖼️ Image Extraction
-| Feature | Description |
-|---------|-------------|
-| Coordinate-based Extraction | Extracts images from `<\|det\|>` coordinate tags |
-| Multi-page Support | Handles images across multiple PDF pages |
-| ZIP Download | All extracted images bundled in a downloadable ZIP |
-| Markdown Links | Replaces image tags with markdown image references |
-
-### 💾 File Persistence
-| Feature | Description |
-|---------|-------------|
-| Upload Storage | All uploads saved to `data/uploads/` with timestamps |
-| Result Storage | All results saved to `data/results/` as `.md` files |
-| Image Storage | Extracted images saved to `data/images/` |
-| Metadata | JSON metadata files for each result |
-| Result Caching | Detects previously processed files |
-
-### 📖 Output Display
-| Feature | Description |
-|---------|-------------|
-| Rendered Tab | Beautiful markdown rendering with scrollbar |
-| Raw Tab | Plain text view for copying/editing |
-| Scrollable Container | Max 600px height with custom scrollbar styling |
-| Multi-file Results | Concatenated results with separators |
-
-### 📥 Downloads
-| Feature | Description |
-|---------|-------------|
-| Markdown Files | Download individual or multiple result files |
-| Images ZIP | Download all extracted images in one archive |
-| Previous Results | Load and view previously saved results |
-
-### ⏹️ Control
-| Feature | Description |
-|---------|-------------|
-| Cancel Button | Stop processing after current file completes |
-| API Health Check | Verify API connection status |
-| Refresh Controls | Refresh API status and file lists |
-
----
 
 ## Technical Architecture
 
@@ -150,49 +71,7 @@ PyYAML
 
 ---
 
-## Development History & Iterations
 
-### Phase 1: Basic Gradio Conversion
-- Converted original CLI scripts to Gradio web interface
-- Added basic PDF upload and processing
-- Implemented Markdown/OCR/Custom mode selection
-
-### Phase 2: Queue System
-- Added multi-file queue with status tracking
-- Implemented drag-and-drop auto-add functionality
-- Created visual queue display with file info and page counts
-
-### Phase 3: Progress & Timing
-- Added real-time progress updates using Gradio generators
-- Implemented adaptive timing that learns from actual processing
-- Added ETA calculations and per-file statistics
-- **Fixed:** Progress clamping at 100% with time/page recalibration
-
-### Phase 4: Post-Processing
-- Implemented tag cleanup for `<|ref|>`, `<|det|>` patterns
-- Added handling for incomplete/truncated tags at document end
-- Added optional page split marker removal
-- Implemented LaTeX symbol replacement
-
-### Phase 5: Image Extraction
-- Added coordinate-based image extraction from PDF pages
-- Implemented multi-page image distribution
-- Created ZIP archive generation for downloads
-- Added markdown image link replacement
-
-### Phase 6: UI/UX Polish
-- Added scrollable markdown container with custom CSS
-- Implemented Rendered/Raw tabs for output viewing
-- Added Clear Done button for queue management
-- Improved file drop persistence (drop zone stays visible)
-
-### Phase 7: Reliability
-- Added extended timeout (2 hours) for large documents
-- Implemented file persistence for uploads and results
-- Added result caching to skip re-processing
-- Improved error handling and logging
-
----
 
 ## UI Components
 
